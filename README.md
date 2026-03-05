@@ -10,6 +10,16 @@ Push-to-talk voice input daemon for Omarchy/Hyprland.
 - `wl-clipboard` (`wl-copy`)
 - `libnotify` (`notify-send`)
 
+Preflight check (recommended before install):
+
+```bash
+set -euo pipefail
+for cmd in node npm pw-record pw-play wl-copy notify-send systemctl; do
+  command -v "$cmd" >/dev/null || { echo "Missing command: $cmd" >&2; exit 1; }
+done
+echo "All required commands are available."
+```
+
 ## Features
 
 - Press hotkey -> start recording (`pw-record`)
@@ -24,8 +34,13 @@ Push-to-talk voice input daemon for Omarchy/Hyprland.
 ## Install
 
 ```bash
-npm install
+npm ci
 npm run build
+```
+
+Install `voicectl` globally only if your hotkey config calls `voicectl`:
+
+```bash
 npm link
 ```
 
@@ -46,6 +61,13 @@ node dist/cli.js stop
 ```
 
 If successful, transcript text is copied to clipboard.
+
+For a deterministic local smoke test without external ASR:
+
+```bash
+node examples/mock-backend.mjs
+VOICE_ENDPOINT=http://127.0.0.1:8787/v1/chat/completions node dist/daemon.js
+```
 
 ## Omarchy / Hyprland Hotkey
 
@@ -93,6 +115,14 @@ WantedBy=default.target
 
 2. Create `~/.config/systemd/user/omaboard-voice.service`:
 
+Find absolute paths and microphone source first:
+
+```bash
+realpath .
+command -v node
+pw-record --list-targets
+```
+
 ```ini
 [Unit]
 Description=Omaboard voice daemon
@@ -107,7 +137,7 @@ Environment=VOICE_ENDPOINT=http://127.0.0.1:18000/v1/chat/completions
 Environment=VOICE_MODEL=qwen3-asr
 Environment=VOICE_LANGUAGE=zh
 Environment="VOICE_RECORD_ARGS=--rate 16000 --channels 1 --target <your-mic-source-name>"
-ExecStart=/usr/bin/env node /absolute/path/to/omaboard/dist/daemon.js
+ExecStart=/absolute/path/to/node /absolute/path/to/omaboard/dist/daemon.js
 Restart=always
 RestartSec=2
 
@@ -133,7 +163,8 @@ voicectl status
 Notes:
 
 - `enabled` user services auto-start after you log in.
-- For startup without login session, run `sudo loginctl enable-linger $USER`.
+- `omaboard-voice.service` requires an active graphical Wayland session (`graphical-session.target`).
+- `sudo loginctl enable-linger $USER` is only suitable for non-graphical services such as the SSH tunnel.
 
 ## Troubleshooting
 
@@ -142,12 +173,15 @@ Notes:
 - Daemon cannot connect to backend:
   - Check `VOICE_ENDPOINT` and test with `curl`.
   - Check logs with `journalctl --user -u omaboard-voice.service -f`.
+- SSH tunnel service restarts or hangs:
+  - Ensure key-based SSH login is configured for `<your-ssh-host-alias>`.
+  - Test non-interactive SSH first: `ssh -o BatchMode=yes <your-ssh-host-alias> true`.
 - No transcript copied to clipboard:
   - Confirm `wl-copy` exists: `which wl-copy`.
   - If you see `Failed to connect to a Wayland server`, make sure `omaboard-voice.service` is started in `graphical-session.target` (not `default.target`) so `WAYLAND_DISPLAY` is available.
 - Microphone not recording:
   - Confirm PipeWire tools exist: `which pw-record`.
-  - If needed, set `VOICE_RECORD_ARGS` with your device target.
+  - List valid targets with `pw-record --list-targets`, then set `VOICE_RECORD_ARGS` with a real source name.
 
 ## Environment Variables
 
@@ -185,9 +219,14 @@ npm run build
 
 ```bash
 node examples/mock-backend.mjs
+VOICE_ENDPOINT=http://127.0.0.1:8787/v1/chat/completions node dist/daemon.js
+# In another shell:
+node dist/cli.js start
+# speak...
+node dist/cli.js stop
 ```
 
-This server accepts OpenAI `/v1/chat/completions` payload and always returns mock text.
+This server listens on `127.0.0.1:8787`, accepts OpenAI `/v1/chat/completions` payload, and always returns mock text.
 
 ## Contributing
 
