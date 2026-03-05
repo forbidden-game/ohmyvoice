@@ -6,6 +6,7 @@ Push-to-talk voice input daemon for Omarchy/Hyprland.
 
 https://github.com/user-attachments/assets/80bbe068-f270-4904-91ab-25bc9aeefd01
 
+- Tip: GitHub video is muted by default. Click the speaker icon to turn on sound.
 - Fallback playback/download: [assets/demo.mp4](./assets/demo.mp4)
 
 ## Prerequisites
