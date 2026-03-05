@@ -27,7 +27,7 @@ export async function transcribeFile(filePath: string, config: AppConfig): Promi
     const responsePayload: unknown = await response.json();
     const text = extractCompletionText(responsePayload);
     if (!text) {
-      throw new Error("JSON response is missing choices[0].message.content");
+      throw new Error("Backend returned empty transcript");
     }
 
     return text;
@@ -109,11 +109,11 @@ function extractCompletionText(payload: unknown): string | null {
   if (parsedAsJson) {
     const textValue = getObjectValue(parsedAsJson, "text");
     if (typeof textValue === "string" && textValue.trim().length > 0) {
-      return textValue.trim();
+      return normalizeTranscriptText(textValue);
     }
   }
 
-  return normalized;
+  return normalizeTranscriptText(normalized);
 }
 
 function getObjectValue(value: unknown, key: string): unknown {
@@ -182,6 +182,20 @@ function stripCodeFence(text: string): string {
   }
 
   return match[1];
+}
+
+function normalizeTranscriptText(text: string): string | null {
+  const normalized = text
+    .trim()
+    .replace(/^language\s+[^\r\n<]+<asr_text>\s*/i, "")
+    .replace(/^<asr_text>\s*/i, "")
+    .trim();
+
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  return normalized;
 }
 
 function truncate(text: string, maxLength: number): string {
