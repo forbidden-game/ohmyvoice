@@ -2,6 +2,14 @@
 
 Push-to-talk voice input daemon for Omarchy/Hyprland.
 
+## Demo
+
+[![omaboard-voice demo](./assets/demo.gif)](./assets/demo.mp4)
+
+- GIF preview: `assets/demo.gif`
+- MP4 playback/download: [assets/demo.mp4](./assets/demo.mp4)
+- GitHub README pages do not reliably inline-play repository video files, so use the link above for video playback.
+
 ## Prerequisites
 
 - Node.js 20+
