@@ -9,6 +9,7 @@ Push-to-talk voice input daemon for Omarchy/Hyprland.
 - Copy transcript directly to clipboard (`wl-copy`)
 - Show desktop notification (`notify-send`)
 - Play start/stop prompt sounds
+- Remove common filler words (`呃` / standalone `恶`) before copying
 - Strict state machine: `idle -> recording -> submitting -> idle`
 - On timeout or empty transcript, retry once automatically
 

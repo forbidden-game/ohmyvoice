@@ -3,6 +3,11 @@ import { readFile } from "node:fs/promises";
 import type { AppConfig } from "./config.js";
 
 const MAX_TRANSCRIBE_ATTEMPTS = 2;
+const FILLER_WORD_BOUNDARY = "\\s,，.。!?！？、;；:：";
+const FILLER_WORD_PATTERN = new RegExp(
+  `(^|[${FILLER_WORD_BOUNDARY}])(?:呃|恶)+(?=($|[${FILLER_WORD_BOUNDARY}]))`,
+  "g"
+);
 
 type TranscribeErrorCode = "timeout" | "emptyTranscript" | "backend" | "unknown";
 
@@ -254,7 +259,22 @@ function normalizeTranscriptText(text: string): string | null {
     return null;
   }
 
-  return normalized;
+  const sanitized = sanitizeFillerWords(normalized);
+  if (sanitized.length === 0) {
+    return null;
+  }
+
+  return sanitized;
+}
+
+function sanitizeFillerWords(text: string): string {
+  return text
+    .replace(FILLER_WORD_PATTERN, "$1")
+    .replace(/[，,、;；:：]\s*[，,、;；:：]+/g, "，")
+    .replace(/^[，,。.!?！？、;；:：\s]+/g, "")
+    .replace(/[，,、;；:：\s]+$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function truncate(text: string, maxLength: number): string {

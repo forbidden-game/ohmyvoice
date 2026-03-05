@@ -81,6 +81,36 @@ describe("transcribeFile retry behavior", () => {
       await rm(dirPath, { recursive: true, force: true });
     }
   });
+
+  it("removes standalone filler words and adjacent punctuation", async () => {
+    const { dirPath, filePath } = await createTempAudioFile();
+    const config = createTestConfig();
+
+    globalThis.fetch = (async () =>
+      createCompletionResponse("呃，我现在测试一下，呃，这个功能非常稳定。")) as MockFetch;
+
+    try {
+      const text = await transcribeFile(filePath, config);
+      assert.equal(text, "我现在测试一下，这个功能非常稳定。");
+    } finally {
+      await rm(dirPath, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps normal words that contain 恶 as part of content", async () => {
+    const { dirPath, filePath } = await createTempAudioFile();
+    const config = createTestConfig();
+
+    globalThis.fetch = (async () =>
+      createCompletionResponse("这个模块会处理恶意输入，不应该误删内容。")) as MockFetch;
+
+    try {
+      const text = await transcribeFile(filePath, config);
+      assert.equal(text, "这个模块会处理恶意输入，不应该误删内容。");
+    } finally {
+      await rm(dirPath, { recursive: true, force: true });
+    }
+  });
 });
 
 function createTestConfig() {
