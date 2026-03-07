@@ -142,6 +142,21 @@ describe("transcribeFile retry behavior", () => {
     }
   });
 
+  it("drops commas that immediately follow sentence-ending punctuation", async () => {
+    const { dirPath, filePath } = await createTempAudioFile();
+    const config = createTestConfig();
+
+    globalThis.fetch = (async () =>
+      createCompletionResponse("这个结果真不错！，你看是不是这样？,我也这么觉得。")) as MockFetch;
+
+    try {
+      const text = await transcribeFile(filePath, config);
+      assert.equal(text, "这个结果真不错。你看是不是这样？我也这么觉得。");
+    } finally {
+      await rm(dirPath, { recursive: true, force: true });
+    }
+  });
+
   it("normalizes percentages into percent symbols", async () => {
     const { dirPath, filePath } = await createTempAudioFile();
     const config = createTestConfig();

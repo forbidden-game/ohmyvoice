@@ -323,6 +323,7 @@ function sanitizeTranscriptText(text: string): string {
     .replace(/^[，,。.!?！？、;；:：\s]+/g, "")
     .replace(/[，,、;；:：\s]+$/g, "")
     .replace(/(?:！|!)+/g, (match) => (match.includes("！") ? "。" : "."))
+    .replace(/((?:。|\.(?!\d)|[!?！？]))\s*[，,、;；:：]+/g, "$1")
     .replace(/\s{2,}/g, " ")
     .trim();
 }
