@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
 
+const WAYLAND_CLIPBOARD_COMMAND = "wl-copy";
+const WAYLAND_CLIPBOARD_ARGS = ["--foreground"];
+
 export async function copyToClipboard(command: string, text: string): Promise<void> {
-  await runCommand(command, [], text, { waitForExit: false });
+  const args = command === WAYLAND_CLIPBOARD_COMMAND ? WAYLAND_CLIPBOARD_ARGS : [];
+  await runCommand(command, args, text);
 }
 
 export async function sendNotification(
@@ -59,8 +63,7 @@ async function runCommand(
         return;
       }
 
-      const extra = stderr.trim().length > 0 ? `: ${stderr.trim()}` : "";
-      settle(() => reject(new Error(`${command} exited with code ${String(code)}${extra}`)));
+      settle(() => reject(buildCommandExitError(command, code, stderr)));
     };
 
     child.once("close", onClose);
@@ -77,4 +80,20 @@ async function runCommand(
       }, 200);
     }
   });
+}
+
+function buildCommandExitError(command: string, code: number | null, stderr: string): Error {
+  const trimmedStderr = stderr.trim();
+  const extra = trimmedStderr.length > 0 ? `: ${trimmedStderr}` : "";
+  let message = `${command} exited with code ${String(code)}${extra}`;
+
+  if (
+    command === WAYLAND_CLIPBOARD_COMMAND &&
+    trimmedStderr.includes("Failed to connect to a Wayland server")
+  ) {
+    message +=
+      ". wl-copy requires an active Wayland session; start omarvoice.service from graphical-session.target or set VOICE_CLIPBOARD_COMMAND to a clipboard tool that matches the current session.";
+  }
+
+  return new Error(message);
 }
