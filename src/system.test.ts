@@ -7,10 +7,10 @@ import { describe, it } from "node:test";
 import { copyToClipboard } from "./system.js";
 
 describe("copyToClipboard", () => {
-  it("waits for wl-copy to finish successfully", async () => {
+  it("does not block on wl-copy staying alive to serve the clipboard", async () => {
     const workspace = await mkdtemp(join(tmpdir(), "omarvoice-system-"));
     const dataPath = join(workspace, "stdin.txt");
-    const markerPath = join(workspace, "done.txt");
+    const markerPath = join(workspace, "started.txt");
     const commandPath = join(workspace, "wl-copy");
     const originalPath = process.env.PATH;
 
@@ -19,8 +19,8 @@ describe("copyToClipboard", () => {
       `#!/usr/bin/env bash
 set -euo pipefail
 cat > ${shellQuote(dataPath)}
-sleep 0.1
-printf 'done\\n' > ${shellQuote(markerPath)}
+printf 'started\\n' > ${shellQuote(markerPath)}
+sleep 5
 `,
       { mode: 0o755 }
     );
@@ -28,10 +28,13 @@ printf 'done\\n' > ${shellQuote(markerPath)}
     process.env.PATH = `${workspace}:${originalPath ?? ""}`;
 
     try {
+      const startedAt = Date.now();
       await copyToClipboard("wl-copy", "hello clipboard");
+      const elapsedMs = Date.now() - startedAt;
 
       assert.equal(await readFile(dataPath, "utf8"), "hello clipboard");
-      assert.equal(await readFile(markerPath, "utf8"), "done\n");
+      assert.equal(await readFile(markerPath, "utf8"), "started\n");
+      assert.ok(elapsedMs < 1000, `copyToClipboard took too long: ${elapsedMs}ms`);
     } finally {
       process.env.PATH = originalPath;
       await rm(workspace, { recursive: true, force: true });

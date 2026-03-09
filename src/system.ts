@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
 
 const WAYLAND_CLIPBOARD_COMMAND = "wl-copy";
+const BACKGROUND_COMMAND_GRACE_MS = 300;
 
 export async function copyToClipboard(command: string, text: string): Promise<void> {
   const args: string[] = [];
-  await runCommand(command, args, text);
+  await runCommand(command, args, text, { waitForExit: false });
 }
 
 export async function sendNotification(
@@ -21,6 +22,7 @@ export async function playSound(command: string, args: string[]): Promise<void> 
 
 interface RunCommandOptions {
   waitForExit?: boolean;
+  backgroundGraceMs?: number;
 }
 
 async function runCommand(
@@ -30,6 +32,7 @@ async function runCommand(
   options: RunCommandOptions = {}
 ): Promise<void> {
   const waitForExit = options.waitForExit ?? true;
+  const backgroundGraceMs = options.backgroundGraceMs ?? BACKGROUND_COMMAND_GRACE_MS;
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
@@ -47,11 +50,18 @@ async function runCommand(
     });
 
     let settled = false;
+    let backgroundTimer: NodeJS.Timeout | null = null;
 
     const settle = (handler: () => void): void => {
       if (settled) {
         return;
       }
+
+      if (backgroundTimer) {
+        clearTimeout(backgroundTimer);
+        backgroundTimer = null;
+      }
+
       settled = true;
       handler();
     };
@@ -74,9 +84,9 @@ async function runCommand(
     child.stdin.end();
 
     if (!waitForExit) {
-      setTimeout(() => {
+      backgroundTimer = setTimeout(() => {
         settle(resolve);
-      }, 200);
+      }, backgroundGraceMs);
     }
   });
 }
