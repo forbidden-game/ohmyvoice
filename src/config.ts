@@ -21,8 +21,17 @@ export interface AppConfig {
 }
 
 const DEFAULT_RECORD_ARGS = ["--rate", "16000", "--channels", "1"];
-const DEFAULT_START_SOUND_ARGS = ["/usr/share/sounds/freedesktop/stereo/bell.oga"];
-const DEFAULT_STOP_SOUND_ARGS = ["/usr/share/sounds/freedesktop/stereo/complete.oga"];
+const DEFAULT_SOUND_VOLUME = "0.35";
+const DEFAULT_START_SOUND_ARGS = [
+  "--volume",
+  DEFAULT_SOUND_VOLUME,
+  "/usr/share/sounds/freedesktop/stereo/bell.oga"
+];
+const DEFAULT_STOP_SOUND_ARGS = [
+  "--volume",
+  DEFAULT_SOUND_VOLUME,
+  "/usr/share/sounds/freedesktop/stereo/complete.oga"
+];
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const runtimeDir = env.XDG_RUNTIME_DIR ?? "/tmp";

@@ -199,9 +199,9 @@ Notes:
 - `VOICE_RECORD_COMMAND`: recorder command. Default: `pw-record`.
 - `VOICE_RECORD_ARGS`: recorder args. Default: `--rate 16000 --channels 1`.
 - `VOICE_START_SOUND_COMMAND`: start prompt command. Default: `pw-play`.
-- `VOICE_START_SOUND_ARGS`: start prompt args. Default: `/usr/share/sounds/freedesktop/stereo/bell.oga`.
+- `VOICE_START_SOUND_ARGS`: start prompt args. Default: `--volume 0.35 /usr/share/sounds/freedesktop/stereo/bell.oga`.
 - `VOICE_STOP_SOUND_COMMAND`: stop prompt command. Default: `pw-play`.
-- `VOICE_STOP_SOUND_ARGS`: stop prompt args. Default: `/usr/share/sounds/freedesktop/stereo/complete.oga`.
+- `VOICE_STOP_SOUND_ARGS`: stop prompt args. Default: `--volume 0.35 /usr/share/sounds/freedesktop/stereo/complete.oga`.
 - `VOICE_CLIPBOARD_COMMAND`: clipboard command. Default: `wl-copy`.
 - `VOICE_NOTIFY_COMMAND`: notification command. Default: `notify-send`.
 - `VOICE_MODEL`: request model. Default: `Qwen/Qwen3-ASR-1.7B`.
