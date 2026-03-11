@@ -8,6 +8,7 @@ const CHINESE_DIGIT_MAP: Record<string, string> = {
   零: "0",
   〇: "0",
   一: "1",
+  幺: "1",
   二: "2",
   两: "2",
   三: "3",
@@ -28,7 +29,8 @@ const CHINESE_LARGE_UNIT_MAP: Record<string, number> = {
   亿: 100_000_000
 };
 const CHINESE_INTEGER_PATTERN = /^[零〇一二两三四五六七八九十百千万亿]+$/;
-const CHINESE_DIGIT_SEQUENCE_PATTERN = /^[零〇一二两三四五六七八九]+$/;
+const CHINESE_DIGIT_SEQUENCE_PATTERN = /^[零〇一二两三四五六七八九幺]+$/;
+const CHINESE_DIGIT_SEQUENCE_GLOBAL_PATTERN = /[零〇一二两三四五六七八九幺]{3,}/g;
 const VERSION_PATTERN =
   /版本\s*([零〇一二两三四五六七八九十百千万亿]+(?:点[零〇一二两三四五六七八九十百千万亿]+)+)/g;
 const PERCENTAGE_PATTERN =
@@ -55,6 +57,20 @@ const STANDALONE_E_PATTERN = new RegExp(
   `(^|[${FILLER_WORD_BOUNDARY}])(?:恶)+(?=($|[${FILLER_WORD_BOUNDARY}]))`,
   "g"
 );
+const COMPUTING_TERM_NORMALIZERS: Array<{ pattern: RegExp; replacement: string }> = [
+  { pattern: /\bmac\s*os\b/gi, replacement: "macOS" },
+  { pattern: /\bubuntu\b/gi, replacement: "Ubuntu" },
+  { pattern: /\bwindows\b/gi, replacement: "Windows" },
+  { pattern: /\blinux\b/gi, replacement: "Linux" },
+  { pattern: /\bgithub\b/gi, replacement: "GitHub" },
+  { pattern: /\bapi\b/gi, replacement: "API" },
+  { pattern: /\bcli\b/gi, replacement: "CLI" },
+  { pattern: /\bssh\b/gi, replacement: "SSH" },
+  { pattern: /\bdocker\b/gi, replacement: "Docker" },
+  { pattern: /\bmac\b/gi, replacement: "mac" },
+  { pattern: /\bgit\b/gi, replacement: "git" },
+  { pattern: /乌班图/g, replacement: "Ubuntu" }
+];
 
 type TranscribeErrorCode = "timeout" | "emptyTranscript" | "backend" | "unknown";
 
@@ -312,10 +328,10 @@ function normalizeTranscriptText(text: string): string | null {
   }
 
   const numericNormalized = normalizeNumericText(sanitized);
-  const caseNormalized = normalizeLetterCase(
+  const termNormalized = normalizeComputingTerms(
     numericNormalized.length > 0 ? numericNormalized : sanitized
   );
-  return caseNormalized.length > 0 ? caseNormalized : null;
+  return termNormalized.length > 0 ? termNormalized : null;
 }
 
 function sanitizeTranscriptText(text: string): string {
@@ -332,11 +348,9 @@ function sanitizeTranscriptText(text: string): string {
 }
 
 function normalizeNumericText(text: string): string {
-  return normalizeStandaloneDecimals(normalizePercentages(normalizeVersions(text)));
-}
-
-function normalizeLetterCase(text: string): string {
-  return text.toLowerCase();
+  return normalizeDigitSequences(
+    normalizeStandaloneDecimals(normalizePercentages(normalizeVersions(text)))
+  );
 }
 
 function normalizeVersions(text: string): string {
@@ -375,6 +389,38 @@ function normalizeStandaloneDecimals(text: string): string {
 
     return `${integerPart}.${fractionPart}`;
   });
+}
+
+function normalizeDigitSequences(text: string): string {
+  return text.replace(CHINESE_DIGIT_SEQUENCE_GLOBAL_PATTERN, (match, offset, source) => {
+    if (!isStandaloneDigitSequence(source, offset, match.length)) {
+      return match;
+    }
+
+    return parseChineseDigitSequence(match) ?? match;
+  });
+}
+
+function isStandaloneDigitSequence(text: string, offset: number, length: number): boolean {
+  const previousChar = text.at(offset - 1);
+  const nextChar = text.at(offset + length);
+  return (
+    !isChineseNumericContext(previousChar) &&
+    !isChineseNumericContext(nextChar) &&
+    previousChar !== "." &&
+    nextChar !== "."
+  );
+}
+
+function isChineseNumericContext(char: string | undefined): boolean {
+  return char !== undefined && /[零〇一二两三四五六七八九幺十百千万亿点]/.test(char);
+}
+
+function normalizeComputingTerms(text: string): string {
+  return COMPUTING_TERM_NORMALIZERS.reduce(
+    (currentText, { pattern, replacement }) => currentText.replace(pattern, replacement),
+    text
+  );
 }
 
 function shouldKeepAsTime(text: string, offset: number, matchLength: number): boolean {

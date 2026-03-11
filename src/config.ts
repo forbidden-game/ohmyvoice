@@ -52,7 +52,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     model: normalizeOptional(env.VOICE_MODEL) ?? "Qwen/Qwen3-ASR-1.7B",
     prompt:
       normalizeOptional(env.VOICE_PROMPT) ??
-      "Please transcribe the audio and return plain text only.",
+      "Please transcribe the audio and return plain text only. Keep common computing terms in English. Use Arabic numerals for numbers, decimals, times, dates, versions, percentages, and digit sequences. Do not write numbers in Chinese characters.",
     language: normalizeOptional(env.VOICE_LANGUAGE),
     maxTokens: parsePositiveInt(env.VOICE_MAX_TOKENS, 1024),
     requestTimeoutMs: parsePositiveInt(env.VOICE_REQUEST_TIMEOUT_MS, 45_000)

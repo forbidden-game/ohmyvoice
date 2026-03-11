@@ -136,22 +136,27 @@ describe("transcribeFile retry behavior", () => {
 
     try {
       const text = await transcribeFile(filePath, config);
-      assert.equal(text, "这个结果真不错。please ship it.");
+      assert.equal(text, "这个结果真不错。Please ship it.");
     } finally {
       await rm(dirPath, { recursive: true, force: true });
     }
   });
 
-  it("normalizes uppercase latin letters to lowercase", async () => {
+  it("normalizes common computing terms to preferred English forms", async () => {
     const { dirPath, filePath } = await createTempAudioFile();
     const config = createTestConfig();
 
     globalThis.fetch = (async () =>
-      createCompletionResponse("Please Ship VERSION TWO ASAP! URL 是 HTTPS://EXAMPLE.COM")) as MockFetch;
+      createCompletionResponse(
+        "请在 ubuntu 上用 github 跑一下 api 和 ssh，docker 也看一下，mac os 那边晚点再测。"
+      )) as MockFetch;
 
     try {
       const text = await transcribeFile(filePath, config);
-      assert.equal(text, "please ship version two asap. url 是 https://example.com");
+      assert.equal(
+        text,
+        "请在 Ubuntu 上用 GitHub 跑一下 API 和 SSH，Docker 也看一下，macOS 那边晚点再测。"
+      );
     } finally {
       await rm(dirPath, { recursive: true, force: true });
     }
@@ -212,6 +217,21 @@ describe("transcribeFile retry behavior", () => {
     try {
       const text = await transcribeFile(filePath, config);
       assert.equal(text, "这个版本大概5.4，先这样发。");
+    } finally {
+      await rm(dirPath, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes long chinese digit sequences into arabic numerals", async () => {
+    const { dirPath, filePath } = await createTempAudioFile();
+    const config = createTestConfig();
+
+    globalThis.fetch = (async () =>
+      createCompletionResponse("你记一下，幺五幺零九九幺七八三八，这是新的号码。")) as MockFetch;
+
+    try {
+      const text = await transcribeFile(filePath, config);
+      assert.equal(text, "你记一下，15109917838，这是新的号码。");
     } finally {
       await rm(dirPath, { recursive: true, force: true });
     }
