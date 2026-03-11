@@ -67,6 +67,7 @@ const COMPUTING_TERM_NORMALIZERS: Array<{ pattern: RegExp; replacement: string }
   { pattern: /\bcli\b/gi, replacement: "CLI" },
   { pattern: /\bssh\b/gi, replacement: "SSH" },
   { pattern: /\bdocker\b/gi, replacement: "Docker" },
+  { pattern: /\bwire\s*guard\b/gi, replacement: "WireGuard" },
   { pattern: /\bmac\b/gi, replacement: "mac" },
   { pattern: /\bgit\b/gi, replacement: "git" },
   { pattern: /乌班图/g, replacement: "Ubuntu" }

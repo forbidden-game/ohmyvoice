@@ -148,14 +148,14 @@ describe("transcribeFile retry behavior", () => {
 
     globalThis.fetch = (async () =>
       createCompletionResponse(
-        "请在 ubuntu 上用 github 跑一下 api 和 ssh，docker 也看一下，mac os 那边晚点再测。"
+        "请在 ubuntu 上用 github 跑一下 api 和 ssh，docker 和 wire guard 也看一下，mac os 那边晚点再测。"
       )) as MockFetch;
 
     try {
       const text = await transcribeFile(filePath, config);
       assert.equal(
         text,
-        "请在 Ubuntu 上用 GitHub 跑一下 API 和 SSH，Docker 也看一下，macOS 那边晚点再测。"
+        "请在 Ubuntu 上用 GitHub 跑一下 API 和 SSH，Docker 和 WireGuard 也看一下，macOS 那边晚点再测。"
       );
     } finally {
       await rm(dirPath, { recursive: true, force: true });
