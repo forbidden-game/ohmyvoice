@@ -1,6 +1,6 @@
 # omarvoice
 
-Push-to-talk voice input daemon for Omarchy/Hyprland.
+Push-to-talk voice input daemon for Linux (Omarchy/Hyprland) and macOS.
 
 ## Demo
 
@@ -10,6 +10,8 @@ https://github.com/user-attachments/assets/80bbe068-f270-4904-91ab-25bc9aeefd01
 - Fallback playback/download: [assets/demo.mp4](./assets/demo.mp4)
 
 ## Prerequisites
+
+### Linux (Wayland/Hyprland)
 
 - Node.js 20+
 - Wayland desktop session (Hyprland)
@@ -26,6 +28,14 @@ for cmd in node npm pw-record pw-play wl-copy notify-send systemctl; do
 done
 echo "All required commands are available."
 ```
+
+### macOS
+
+- Node.js 20+ (`brew install node`)
+- ffmpeg (`brew install ffmpeg`) — for audio recording via AVFoundation
+- Hammerspoon (optional, `brew install --cask hammerspoon`) — for global push-to-talk hotkey
+
+All other tools (`afplay`, `pbcopy`, `osascript`) are built into macOS. Defaults auto-detect platform.
 
 ## Features
 
@@ -75,6 +85,12 @@ For a deterministic local smoke test without external ASR:
 node examples/mock-backend.mjs
 VOICE_ENDPOINT=http://127.0.0.1:8787/v1/chat/completions node dist/daemon.js
 ```
+
+## macOS Hotkey (Hammerspoon)
+
+Copy `contrib/macos/omarvoice.lua` into `~/.hammerspoon/init.lua` (or source it). Edit `nodeBin` and `cliScript` to match your install paths. Requires Accessibility permission in System Settings > Privacy & Security.
+
+Hold F1 to record, release to stop. See the Lua file for details.
 
 ## Omarchy / Hyprland Hotkey
 
@@ -173,6 +189,21 @@ Notes:
 - `omarvoice.service` requires an active graphical Wayland session (`graphical-session.target`).
 - `sudo loginctl enable-linger $USER` is only suitable for non-graphical services such as the SSH tunnel.
 
+## macOS LaunchAgent (Autostart)
+
+Copy the example plist and edit absolute paths:
+
+```bash
+cp contrib/macos/com.omarvoice.daemon.plist ~/Library/LaunchAgents/
+# Edit paths in the plist to match your install
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.omarvoice.daemon.plist
+launchctl kickstart -k gui/$(id -u)/com.omarvoice.daemon
+```
+
+To remove or before re-installing: `launchctl bootout gui/$(id -u)/com.omarvoice.daemon`
+
+**Important:** `launchctl` runs with an empty PATH. The plist sets absolute paths for node and includes `/opt/homebrew/bin` in PATH for ffmpeg.
+
 ## Troubleshooting
 
 - `voicectl` command not found:
@@ -190,20 +221,30 @@ Notes:
   - Confirm PipeWire tools exist: `which pw-record`.
   - List valid sources with `pactl list short sources`; if needed, pin one source in `VOICE_RECORD_ARGS` by adding `--target <source-name>`.
 
+### macOS
+
+- **Microphone permission**: ffmpeg needs Microphone access — grant in System Settings > Privacy & Security > Microphone for Terminal / iTerm / whichever app runs the daemon. Run the daemon once from an interactive terminal first to trigger the macOS permission prompt before switching to LaunchAgent.
+- **Accessibility permission**: Hammerspoon needs Accessibility for global hotkey capture — grant in System Settings > Privacy & Security > Accessibility.
+- **LaunchAgent PATH**: If daemon can't find ffmpeg, check `/tmp/omarvoice.stderr.log`; ensure absolute paths in plist and that PATH includes `/opt/homebrew/bin`.
+- **AVFoundation device selection**: Use device index (`:0`, `:1`), not device name. Find indices with `ffmpeg -f avfoundation -list_devices true -i ""`.
+- **WireGuard**: Backend at 10.66.0.3:8000 requires active WireGuard tunnel.
+
 ## Environment Variables
+
+Defaults auto-detect platform. Linux defaults shown first; macOS defaults in parentheses.
 
 - `VOICE_ENDPOINT`: OpenAI-compatible chat completions endpoint.
 - `VOICE_API_KEY`: optional bearer token.
-- `VOICE_SOCKET_PATH`: Unix socket path. Default: `$XDG_RUNTIME_DIR/omarvoice.sock`.
+- `VOICE_SOCKET_PATH`: Unix socket path. Default: `$XDG_RUNTIME_DIR/omarvoice.sock` (macOS: `/tmp/omarvoice.sock`).
 - `VOICE_TMP_DIR`: temp wav dir. Default: `/tmp`.
-- `VOICE_RECORD_COMMAND`: recorder command. Default: `pw-record`.
-- `VOICE_RECORD_ARGS`: recorder args. Default: `--rate 16000 --channels 1`.
-- `VOICE_START_SOUND_COMMAND`: start prompt command. Default: `pw-play`.
-- `VOICE_START_SOUND_ARGS`: start prompt args. Default: `--volume 0.35 /usr/share/sounds/freedesktop/stereo/bell.oga`.
-- `VOICE_STOP_SOUND_COMMAND`: stop prompt command. Default: `pw-play`.
-- `VOICE_STOP_SOUND_ARGS`: stop prompt args. Default: `--volume 0.35 /usr/share/sounds/freedesktop/stereo/complete.oga`.
-- `VOICE_CLIPBOARD_COMMAND`: clipboard command. Default: `wl-copy`.
-- `VOICE_NOTIFY_COMMAND`: notification command. Default: `notify-send`.
+- `VOICE_RECORD_COMMAND`: recorder command. Default: `pw-record` (macOS: `ffmpeg`).
+- `VOICE_RECORD_ARGS`: recorder args. Default: `--rate 16000 --channels 1` (macOS: `-f avfoundation -i :default -ar 16000 -ac 1 -y`).
+- `VOICE_START_SOUND_COMMAND`: start prompt command. Default: `pw-play` (macOS: `afplay`).
+- `VOICE_START_SOUND_ARGS`: start prompt args. Default: `--volume 0.35 /usr/.../bell.oga` (macOS: `-v 0.35 /System/Library/Sounds/Tink.aiff`).
+- `VOICE_STOP_SOUND_COMMAND`: stop prompt command. Default: `pw-play` (macOS: `afplay`).
+- `VOICE_STOP_SOUND_ARGS`: stop prompt args. Default: `--volume 0.35 /usr/.../complete.oga` (macOS: `-v 0.35 /System/Library/Sounds/Glass.aiff`).
+- `VOICE_CLIPBOARD_COMMAND`: clipboard command. Default: `wl-copy` (macOS: `pbcopy`).
+- `VOICE_NOTIFY_COMMAND`: notification command. Default: `notify-send` (macOS: `osascript`).
 - `VOICE_MODEL`: request model. Default: `Qwen/Qwen3-ASR-1.7B`.
 - `VOICE_PROMPT`: prompt text.
 - `VOICE_LANGUAGE`: optional language hint appended to prompt.

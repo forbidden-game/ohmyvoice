@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { copyToClipboard } from "./system.js";
+import { copyToClipboard, sendNotification } from "./system.js";
 
 describe("copyToClipboard", () => {
   it("does not block on wl-copy staying alive to serve the clipboard", async () => {
@@ -73,3 +73,68 @@ exit 1
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
+
+describe("sendNotification", () => {
+  it("uses on run argv for osascript command", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "omarvoice-notify-"));
+    const argsPath = join(workspace, "args.json");
+    const commandPath = join(workspace, "osascript");
+
+    await writeFile(
+      commandPath,
+      `#!/usr/bin/env bash
+printf '%s\\n' "$@" > ${shellQuote(argsPath)}
+`,
+      { mode: 0o755 }
+    );
+
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${workspace}:${originalPath ?? ""}`;
+
+    try {
+      await sendNotification("osascript", "Test Title", "Test Body");
+      const captured = await readFile(argsPath, "utf8");
+      const lines = captured.trimEnd().split("\n");
+
+      // Script arg contains embedded newlines, so it spans multiple output lines
+      assert.equal(lines[0], "-e");
+      assert.ok(lines[1]!.includes("on run argv"));
+      assert.ok(captured.includes("display notification"));
+      assert.equal(lines[lines.length - 2], "Test Title");
+      assert.equal(lines[lines.length - 1], "Test Body");
+    } finally {
+      process.env.PATH = originalPath;
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("uses positional args for notify-send", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "omarvoice-notify-"));
+    const argsPath = join(workspace, "args.json");
+    const commandPath = join(workspace, "notify-send");
+
+    await writeFile(
+      commandPath,
+      `#!/usr/bin/env bash
+printf '%s\\n' "$@" > ${shellQuote(argsPath)}
+`,
+      { mode: 0o755 }
+    );
+
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${workspace}:${originalPath ?? ""}`;
+
+    try {
+      await sendNotification("notify-send", "Title", "Body text");
+      const captured = await readFile(argsPath, "utf8");
+      const lines = captured.trimEnd().split("\n");
+
+      assert.equal(lines[0], "Title");
+      assert.equal(lines[1], "Body text");
+      assert.equal(lines.length, 2);
+    } finally {
+      process.env.PATH = originalPath;
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+});

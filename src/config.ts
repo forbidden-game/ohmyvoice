@@ -20,35 +20,60 @@ export interface AppConfig {
   requestTimeoutMs: number;
 }
 
-const DEFAULT_RECORD_ARGS = ["--rate", "16000", "--channels", "1"];
 const DEFAULT_SOUND_VOLUME = "0.35";
-const DEFAULT_START_SOUND_ARGS = [
+
+const LINUX_RECORD_ARGS = ["--rate", "16000", "--channels", "1"];
+const LINUX_START_SOUND_ARGS = [
   "--volume",
   DEFAULT_SOUND_VOLUME,
   "/usr/share/sounds/freedesktop/stereo/bell.oga"
 ];
-const DEFAULT_STOP_SOUND_ARGS = [
+const LINUX_STOP_SOUND_ARGS = [
   "--volume",
   DEFAULT_SOUND_VOLUME,
   "/usr/share/sounds/freedesktop/stereo/complete.oga"
 ];
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+const MACOS_RECORD_ARGS = [
+  "-f",
+  "avfoundation",
+  "-i",
+  ":default",
+  "-ar",
+  "16000",
+  "-ac",
+  "1",
+  "-y"
+];
+const MACOS_START_SOUND_ARGS = ["-v", DEFAULT_SOUND_VOLUME, "/System/Library/Sounds/Tink.aiff"];
+const MACOS_STOP_SOUND_ARGS = ["-v", DEFAULT_SOUND_VOLUME, "/System/Library/Sounds/Glass.aiff"];
+
+export function loadConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): AppConfig {
+  const isDarwin = platform === "darwin";
   const runtimeDir = env.XDG_RUNTIME_DIR ?? "/tmp";
+  const defaultSocketPath = isDarwin ? "/tmp/omarvoice.sock" : join(runtimeDir, "omarvoice.sock");
 
   return {
-    socketPath: env.VOICE_SOCKET_PATH ?? join(runtimeDir, "omarvoice.sock"),
+    socketPath: env.VOICE_SOCKET_PATH ?? defaultSocketPath,
     endpoint: env.VOICE_ENDPOINT ?? "http://127.0.0.1:8000/v1/chat/completions",
     apiKey: normalizeOptional(env.VOICE_API_KEY),
     tmpDir: env.VOICE_TMP_DIR ?? "/tmp",
-    recordCommand: env.VOICE_RECORD_COMMAND ?? "pw-record",
-    recordArgs: parseArgs(env.VOICE_RECORD_ARGS) ?? DEFAULT_RECORD_ARGS,
-    startSoundCommand: env.VOICE_START_SOUND_COMMAND ?? "pw-play",
-    startSoundArgs: parseArgs(env.VOICE_START_SOUND_ARGS) ?? DEFAULT_START_SOUND_ARGS,
-    stopSoundCommand: env.VOICE_STOP_SOUND_COMMAND ?? "pw-play",
-    stopSoundArgs: parseArgs(env.VOICE_STOP_SOUND_ARGS) ?? DEFAULT_STOP_SOUND_ARGS,
-    clipboardCommand: env.VOICE_CLIPBOARD_COMMAND ?? "wl-copy",
-    notifyCommand: env.VOICE_NOTIFY_COMMAND ?? "notify-send",
+    recordCommand: env.VOICE_RECORD_COMMAND ?? (isDarwin ? "ffmpeg" : "pw-record"),
+    recordArgs:
+      parseArgs(env.VOICE_RECORD_ARGS) ?? (isDarwin ? MACOS_RECORD_ARGS : LINUX_RECORD_ARGS),
+    startSoundCommand: env.VOICE_START_SOUND_COMMAND ?? (isDarwin ? "afplay" : "pw-play"),
+    startSoundArgs:
+      parseArgs(env.VOICE_START_SOUND_ARGS) ??
+      (isDarwin ? MACOS_START_SOUND_ARGS : LINUX_START_SOUND_ARGS),
+    stopSoundCommand: env.VOICE_STOP_SOUND_COMMAND ?? (isDarwin ? "afplay" : "pw-play"),
+    stopSoundArgs:
+      parseArgs(env.VOICE_STOP_SOUND_ARGS) ??
+      (isDarwin ? MACOS_STOP_SOUND_ARGS : LINUX_STOP_SOUND_ARGS),
+    clipboardCommand: env.VOICE_CLIPBOARD_COMMAND ?? (isDarwin ? "pbcopy" : "wl-copy"),
+    notifyCommand: env.VOICE_NOTIFY_COMMAND ?? (isDarwin ? "osascript" : "notify-send"),
     model: normalizeOptional(env.VOICE_MODEL) ?? "Qwen/Qwen3-ASR-1.7B",
     prompt:
       normalizeOptional(env.VOICE_PROMPT) ??

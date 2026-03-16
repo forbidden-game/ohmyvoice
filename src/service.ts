@@ -8,6 +8,20 @@ import { transitionState, type VoiceState } from "./state-machine.js";
 import { copyToClipboard, playSound, sendNotification } from "./system.js";
 import { transcribeFile } from "./transcribe.js";
 
+/** Named export for module-level test coverage. */
+export function isRecorderExitOk(
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  stopSignalSent: boolean
+): boolean {
+  return (
+    code === 0 ||
+    signal === "SIGINT" ||
+    signal === "SIGTERM" ||
+    (stopSignalSent && signal === null && (code === 1 || code === 255))
+  );
+}
+
 export class VoiceService {
   private state: VoiceState = "idle";
   private recorder: ChildProcess | null = null;
@@ -247,12 +261,7 @@ export class VoiceService {
       };
 
       const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
-        if (
-          code === 0 ||
-          signal === "SIGINT" ||
-          signal === "SIGTERM" ||
-          (stopSignalSent && code === 1 && signal === null)
-        ) {
+        if (isRecorderExitOk(code, signal, stopSignalSent)) {
           settleOk();
           return;
         }

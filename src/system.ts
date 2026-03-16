@@ -13,7 +13,16 @@ export async function sendNotification(
   title: string,
   body: string
 ): Promise<void> {
-  await runCommand(command, [title, body]);
+  if (command === "osascript") {
+    await runCommand(command, [
+      "-e",
+      "on run argv\ndisplay notification (item 2 of argv) with title (item 1 of argv)\nend run",
+      title,
+      body
+    ]);
+  } else {
+    await runCommand(command, [title, body]);
+  }
 }
 
 export async function playSound(command: string, args: string[]): Promise<void> {
