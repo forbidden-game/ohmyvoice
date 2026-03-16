@@ -77,8 +77,9 @@ export class VoiceService {
 
     const filename = `omarvoice-${Date.now()}.wav`;
     const filePath = join(this.config.tmpDir, filename);
+    const useStdinStop = this.config.recordCommand === "ffmpeg";
     const recorder = spawn(this.config.recordCommand, [...this.config.recordArgs, filePath], {
-      stdio: ["ignore", "ignore", "pipe"]
+      stdio: [useStdinStop ? "pipe" : "ignore", "ignore", "pipe"]
     });
 
     this.recorderStderr = "";
@@ -281,9 +282,16 @@ export class VoiceService {
       recorder.once("error", onError);
 
       stopSignalSent = true;
-      const killOk = recorder.kill("SIGINT");
-      if (!killOk && (recorder.exitCode !== null || recorder.signalCode !== null)) {
-        settleOk();
+      // For ffmpeg, send 'q' via stdin for graceful shutdown that flushes output.
+      // For other recorders (pw-record), use SIGINT.
+      if (recorder.stdin?.writable) {
+        recorder.stdin.write("q");
+        recorder.stdin.end();
+      } else {
+        const killOk = recorder.kill("SIGINT");
+        if (!killOk && (recorder.exitCode !== null || recorder.signalCode !== null)) {
+          settleOk();
+        }
       }
     });
   }

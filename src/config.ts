@@ -43,6 +43,8 @@ const MACOS_RECORD_ARGS = [
   "16000",
   "-ac",
   "1",
+  "-flush_packets",
+  "1",
   "-y"
 ];
 const MACOS_START_SOUND_ARGS = ["-v", DEFAULT_SOUND_VOLUME, "/System/Library/Sounds/Tink.aiff"];
