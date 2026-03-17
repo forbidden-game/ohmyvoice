@@ -149,6 +149,15 @@ echo "Generated ${HS_DIR}/ohmyvoice.lua"
 if [ -f "${HS_INIT}" ]; then
   if grep -qF 'require("ohmyvoice")' "${HS_INIT}" 2>/dev/null; then
     echo "init.lua already requires ohmyvoice — skipping."
+  elif grep -qE 'ohmyvoice|voiceTap' "${HS_INIT}" 2>/dev/null; then
+    echo ""
+    echo "WARNING: ${HS_INIT} contains existing ohmyvoice code (inline, not via require)."
+    echo "Adding require(\"ohmyvoice\") would conflict with it (double daemon, double hotkey)."
+    echo ""
+    echo "To fix, replace the inline ohmyvoice code in init.lua with:"
+    echo "  require(\"ohmyvoice\")"
+    echo ""
+    echo "Skipping init.lua modification. Generated ohmyvoice.lua is ready to use."
   else
     echo '' >> "${HS_INIT}"
     echo 'require("ohmyvoice")' >> "${HS_INIT}"

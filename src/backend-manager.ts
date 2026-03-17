@@ -1,8 +1,10 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { dirname } from "node:path";
 
 import type { AppConfig } from "./config.js";
+import { sendNotification } from "./system.js";
 
 const HEALTH_CHECK_INTERVAL_MS = 300;
 const HEALTH_CHECK_TIMEOUT_MS = 30_000;
@@ -24,9 +26,9 @@ export class BackendManager {
   private readonly managed: boolean;
   private readonly pidFile: string;
   private readonly script: string;
-  private readonly healthUrl: string;
+  private healthUrl: string;
   private readonly backendHost: string;
-  private readonly backendPort: string;
+  private backendPort: string;
 
   public constructor(private readonly config: AppConfig) {
     this.managed = config.backendMode === "managed";
@@ -47,6 +49,7 @@ export class BackendManager {
    */
   public async start(): Promise<void> {
     if (!this.managed) {
+      this.logExternalModeHint();
       return;
     }
 
@@ -60,6 +63,7 @@ export class BackendManager {
       return;
     }
 
+    await this.resolvePort();
     await this.spawnBackend();
     await this.waitForHealth();
   }
@@ -77,6 +81,64 @@ export class BackendManager {
   // -----------------------------------------------------------------------
   // Internal
   // -----------------------------------------------------------------------
+
+  /** Log a hint when the endpoint looks like localhost but mode is external. */
+  private logExternalModeHint(): void {
+    try {
+      const url = new URL(this.config.endpoint);
+      if (url.hostname === "127.0.0.1" || url.hostname === "localhost") {
+        console.log(
+          'backend-manager: backend mode is "external". ' +
+            "Set VOICE_BACKEND=managed to auto-start the local SenseVoice backend on this port."
+        );
+      }
+    } catch {
+      // Ignore malformed URLs.
+    }
+  }
+
+  /**
+   * Check whether the configured port is available.  If it's occupied by
+   * something other than our backend, find the next free port, update the
+   * shared config (so VoiceService sends requests to the right place), and
+   * notify the user via desktop notification + console log.
+   */
+  private async resolvePort(): Promise<void> {
+    const port = Number.parseInt(this.backendPort, 10);
+
+    if (await isPortAvailable(this.backendHost, port)) {
+      return;
+    }
+
+    console.log(`backend-manager: port ${port} is occupied, searching for available port...`);
+
+    let newPort: number;
+    try {
+      newPort = await findAvailablePort(this.backendHost, port + 1);
+    } catch {
+      const msg = `Port ${port} is occupied and no free port found (tried ${port + 1}–${port + PORT_SCAN_RANGE}). Check what is using port ${port}, or set VOICE_ENDPOINT to an available port.`;
+      console.error(`backend-manager: ${msg}`);
+      await this.notifyUser("ohmyvoice: Port Error", msg);
+      throw new Error(msg);
+    }
+
+    console.log(`backend-manager: port ${port} → ${newPort}`);
+
+    const url = new URL(this.config.endpoint);
+    url.port = String(newPort);
+    this.config.endpoint = url.toString();
+    this.backendPort = String(newPort);
+    this.healthUrl = `${url.protocol}//${url.host}/health`;
+
+    await this.notifyUser(
+      "ohmyvoice",
+      `Port ${port} was occupied. Backend started on port ${newPort}.`
+    );
+  }
+
+  private async notifyUser(title: string, body: string): Promise<void> {
+    await sendNotification(this.config.notifyCommand, title, body).catch(() => undefined);
+  }
 
   private async spawnBackend(): Promise<void> {
     const venvPython = `${dirname(this.script)}/.venv/bin/python3`;
@@ -294,6 +356,28 @@ function isOwnedProcess(pid: number, scriptPath: string): boolean {
   } catch {
     return false;
   }
+}
+
+const PORT_SCAN_RANGE = 20;
+
+function isPortAvailable(host: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, host);
+  });
+}
+
+async function findAvailablePort(host: string, startPort: number): Promise<number> {
+  for (let port = startPort; port < startPort + PORT_SCAN_RANGE; port++) {
+    if (await isPortAvailable(host, port)) {
+      return port;
+    }
+  }
+  throw new Error(`No available port in range ${startPort}–${startPort + PORT_SCAN_RANGE - 1}`);
 }
 
 async function fileExists(path: string): Promise<boolean> {

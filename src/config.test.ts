@@ -121,6 +121,19 @@ describe("loadConfig backendMode", () => {
     assert.equal(config.backendMode, "external");
   });
 
+  it("defaults to external on macOS with localhost endpoint", () => {
+    const config = loadConfig(
+      { VOICE_ENDPOINT: "http://localhost:8000/v1/chat/completions" },
+      "darwin"
+    );
+    assert.equal(config.backendMode, "external");
+  });
+
+  it("defaults to external on macOS with custom local path", () => {
+    const config = loadConfig({ VOICE_ENDPOINT: "http://127.0.0.1:8000/mock-server" }, "darwin");
+    assert.equal(config.backendMode, "external");
+  });
+
   it("defaults to external on macOS with remote endpoint", () => {
     const config = loadConfig(
       { VOICE_ENDPOINT: "https://api.example.com/v1/chat/completions" },

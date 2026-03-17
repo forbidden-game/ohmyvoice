@@ -249,33 +249,33 @@ Notes:
 
 All settings are environment variables. Defaults auto-detect your platform — most users need zero configuration.
 
-| Variable                   | Description                             | Default               |
-| -------------------------- | --------------------------------------- | --------------------- |
-| `VOICE_ENDPOINT`           | OpenAI-compatible chat completions URL  | `http://127.0.0.1:8000/v1/chat/completions` |
-| `VOICE_BACKEND`            | `managed` (auto-start SenseVoice) or `external` | `managed` when using bundled endpoint, otherwise `external` |
-| `VOICE_API_KEY`            | Bearer token (if backend requires auth) | _(none)_              |
-| `VOICE_MODEL`              | Model name in request body              | `Qwen/Qwen3-ASR-1.7B` |
-| `VOICE_LANGUAGE`           | Language hint appended to prompt        | _(none)_              |
-| `VOICE_PROMPT`             | Custom prompt text                      | _(built-in)_          |
-| `VOICE_MAX_TOKENS`         | `max_tokens` in request                 | `1024`                |
-| `VOICE_REQUEST_TIMEOUT_MS` | Request timeout (ms)                    | `45000`               |
+| Variable                   | Description                                     | Default                                                                  |
+| -------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `VOICE_ENDPOINT`           | OpenAI-compatible chat completions URL          | `http://127.0.0.1:8000/v1/chat/completions`                              |
+| `VOICE_BACKEND`            | `managed` (auto-start SenseVoice) or `external` | `managed` when using the default endpoint on macOS; `external` otherwise |
+| `VOICE_API_KEY`            | Bearer token (if backend requires auth)         | _(none)_                                                                 |
+| `VOICE_MODEL`              | Model name in request body                      | `Qwen/Qwen3-ASR-1.7B`                                                    |
+| `VOICE_LANGUAGE`           | Language hint appended to prompt                | _(none)_                                                                 |
+| `VOICE_PROMPT`             | Custom prompt text                              | _(built-in)_                                                             |
+| `VOICE_MAX_TOKENS`         | `max_tokens` in request                         | `1024`                                                                   |
+| `VOICE_REQUEST_TIMEOUT_MS` | Request timeout (ms)                            | `45000`                                                                  |
 
 <details>
 <summary>Platform-specific defaults (click to expand)</summary>
 
-| Variable                    | Linux                                 | macOS                                            |
-| --------------------------- | ------------------------------------- | ------------------------------------------------ |
-| `VOICE_SOCKET_PATH`         | `$XDG_RUNTIME_DIR/ohmyvoice.sock`     | `/tmp/ohmyvoice.sock`                            |
-| `VOICE_TMP_DIR`             | `/tmp`                                | `/tmp`                                           |
-| `VOICE_RECORD_COMMAND`      | `pw-record`                           | `ffmpeg`                                         |
-| `VOICE_RECORD_FILE_EXT`     | `.wav`                                | `.ogg`                                           |
-| `VOICE_RECORD_ARGS`         | `--rate 16000 --channels 1`           | `-f avfoundation -i :default -ar 16000 -ac 1 -c:a libopus -application voip -y` |
-| `VOICE_START_SOUND_COMMAND` | `pw-play`                             | `afplay`                                         |
-| `VOICE_START_SOUND_ARGS`    | `--volume 0.35 /usr/.../bell.oga`     | `-v 0.35 /System/.../Tink.aiff`                  |
-| `VOICE_STOP_SOUND_COMMAND`  | `pw-play`                             | `afplay`                                         |
-| `VOICE_STOP_SOUND_ARGS`     | `--volume 0.35 /usr/.../complete.oga` | `-v 0.35 /System/.../Glass.aiff`                 |
-| `VOICE_CLIPBOARD_COMMAND`   | `wl-copy`                             | `pbcopy`                                         |
-| `VOICE_NOTIFY_COMMAND`      | `notify-send`                         | `osascript`                                      |
+| Variable                    | Linux                                 | macOS                                                                                            |
+| --------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `VOICE_SOCKET_PATH`         | `$XDG_RUNTIME_DIR/ohmyvoice.sock`     | `/tmp/ohmyvoice.sock`                                                                            |
+| `VOICE_TMP_DIR`             | `/tmp`                                | `/tmp`                                                                                           |
+| `VOICE_RECORD_COMMAND`      | `pw-record`                           | `ffmpeg`                                                                                         |
+| `VOICE_RECORD_FILE_EXT`     | `.wav`                                | `.ogg`                                                                                           |
+| `VOICE_RECORD_ARGS`         | `--rate 16000 --channels 1`           | `-f avfoundation -i :default -ar 16000 -ac 1 -c:a libopus -application voip -flush_packets 1 -y` |
+| `VOICE_START_SOUND_COMMAND` | `pw-play`                             | `afplay`                                                                                         |
+| `VOICE_START_SOUND_ARGS`    | `--volume 0.35 /usr/.../bell.oga`     | `-v 0.35 /System/.../Tink.aiff`                                                                  |
+| `VOICE_STOP_SOUND_COMMAND`  | `pw-play`                             | `afplay`                                                                                         |
+| `VOICE_STOP_SOUND_ARGS`     | `--volume 0.35 /usr/.../complete.oga` | `-v 0.35 /System/.../Glass.aiff`                                                                 |
+| `VOICE_CLIPBOARD_COMMAND`   | `wl-copy`                             | `pbcopy`                                                                                         |
+| `VOICE_NOTIFY_COMMAND`      | `notify-send`                         | `osascript`                                                                                      |
 
 </details>
 
