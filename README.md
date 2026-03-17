@@ -13,6 +13,10 @@
   <strong>macOS</strong> · <strong>Linux (Wayland / Hyprland)</strong>
 </p>
 
+> **ohmyvoice 是一个纯本地的语音输入客户端。** 它负责录音、热键管理和剪贴板集成，语音识别（ASR）由你自己部署的模型（如 Qwen3-ASR、Whisper）或第三方 API 提供。只要后端兼容 OpenAI Chat Completions 接口，即可接入。
+>
+> **ohmyvoice is a local voice input client.** It handles recording, hotkeys, and clipboard — speech recognition is provided by your own self-hosted model (Qwen3-ASR, Whisper, etc.) or any third-party API. Any OpenAI-compatible Chat Completions endpoint works.
+
 ---
 
 ## Demo
