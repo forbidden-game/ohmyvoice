@@ -137,13 +137,10 @@ class _ActionDelegate(NSObject):
     def onHistoryLimitChanged_(self, sender):
         if self._prefs is None:
             return
-        try:
-            val = int(sender.stringValue())
-        except (ValueError, TypeError):
-            return
-        settings = self._prefs._app._settings
-        settings.history_max_entries = val
-        settings.save()
+        val = sender.integerValue()
+        if 100 <= val <= 5000:
+            self._prefs._app._settings.history_max_entries = val
+            self._prefs._app._settings.save()
 
     def onRecordHotkey_(self, sender):
         # Placeholder — actual capture logic comes in Task 6
@@ -244,7 +241,7 @@ class PreferencesWindow:
         label.setFont_(NSFont.systemFontOfSize_(10))
         label.setTextColor_(NSColor.secondaryLabelColor())
         parent.addSubview_(label)
-        return label
+        return y + 16
 
     def _group_box(self, parent, y, height):
         """Rounded background box for grouped rows."""
@@ -299,6 +296,7 @@ class PreferencesWindow:
         ctrl_y = row_y + (row_h - ctrl_h) / 2
         control.setFrameOrigin_(_make_point(ctrl_x, ctrl_y))
         group.addSubview_(control)
+        return row_y + row_h
 
     def _separator_in_group(self, group, y):
         """1px horizontal separator line inside a group."""
