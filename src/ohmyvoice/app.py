@@ -79,21 +79,13 @@ class OhMyVoiceApp(rumps.App):
         if self._settings.sound_feedback:
             play_start()
         self._recorder.start()
-        # Enforce max recording duration
-        max_sec = self._settings.max_recording_seconds
-        self._max_rec_timer = rumps.Timer(
-            lambda t: (t.stop(), self._on_hotkey_release()),
-            max_sec,
-        )
-        self._max_rec_timer.start()
 
     def _on_hotkey_release(self):
         if self._state != "recording":
             return
-        if hasattr(self, "_max_rec_timer"):
-            self._max_rec_timer.stop()
         audio = self._recorder.stop()
         if len(audio) < 1600:  # < 0.1s, ignore accidental taps
+            print("[DEBUG] Audio too short, ignoring")
             self._set_state("idle")
             return
         self._set_state("processing")
