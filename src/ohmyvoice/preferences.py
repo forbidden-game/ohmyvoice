@@ -156,8 +156,8 @@ class _ActionDelegate(NSObject):
             self._prefs._app._settings.save()
 
     def onRecordHotkey_(self, sender):
-        # Placeholder — actual capture logic comes in Task 6
-        pass
+        if self._prefs is not None:
+            self._prefs._start_hotkey_capture()
 
     def onMicChanged_(self, sender):
         if self._prefs is None:
@@ -276,6 +276,8 @@ class PreferencesWindow:
         self._quant_popup = None
         # About tab control references
         self._app_name_label = None
+        # Hotkey capture state
+        self._key_monitor = None
         self._action_delegate = _ActionDelegate.alloc().init()
         self._action_delegate._prefs = self
 
@@ -1007,6 +1009,89 @@ class PreferencesWindow:
         self._row_in_group(links_box, "反馈与建议", fb_btn, row_y)
 
         return view
+
+    # ---------------------------------------------------------------- hotkey capture
+
+    def _start_hotkey_capture(self):
+        """Enter hotkey capture mode."""
+        from AppKit import NSEvent, NSEventMaskKeyDown
+
+        if self._app._hotkey:
+            self._app._hotkey.pause()
+
+        self._record_btn.setTitle_("按下新组合...")
+        self._record_btn.setEnabled_(False)
+
+        def handler(event):
+            flags = event.modifierFlags()
+            keycode = event.keyCode()
+            mods = self._flags_to_modifiers(flags)
+            key = self._keycode_to_name(keycode)
+            if key and mods:
+                self._finish_hotkey_capture(mods, key)
+            return event
+
+        self._key_monitor = NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
+            NSEventMaskKeyDown, handler
+        )
+
+    def _finish_hotkey_capture(self, modifiers, key):
+        """Apply captured hotkey and exit capture mode."""
+        from AppKit import NSEvent
+
+        if self._key_monitor:
+            NSEvent.removeMonitor_(self._key_monitor)
+            self._key_monitor = None
+
+        s = self._app._settings
+        s.hotkey_modifiers = modifiers
+        s.hotkey_key = key
+        s.save()
+
+        self._hotkey_label.setStringValue_(s.hotkey_display)
+        self._record_btn.setTitle_("录制")
+        self._record_btn.setEnabled_(True)
+
+        if self._app._hotkey:
+            self._app._hotkey.update_hotkey(modifiers, key)
+            self._app._hotkey.resume()
+
+    def _cancel_hotkey_capture(self):
+        """Exit capture mode without changes."""
+        from AppKit import NSEvent
+
+        if self._key_monitor:
+            NSEvent.removeMonitor_(self._key_monitor)
+            self._key_monitor = None
+
+        self._record_btn.setTitle_("录制")
+        self._record_btn.setEnabled_(True)
+
+        if self._app._hotkey:
+            self._app._hotkey.resume()
+
+    @staticmethod
+    def _flags_to_modifiers(flags):
+        """Convert NSEvent modifier flags to list of modifier names."""
+        result = []
+        if flags & (1 << 20):  # NSEventModifierFlagCommand
+            result.append("command")
+        if flags & (1 << 17):  # NSEventModifierFlagShift
+            result.append("shift")
+        if flags & (1 << 19):  # NSEventModifierFlagOption
+            result.append("option")
+        if flags & (1 << 18):  # NSEventModifierFlagControl
+            result.append("control")
+        return result
+
+    @staticmethod
+    def _keycode_to_name(keycode):
+        """Convert macOS keycode to key name string."""
+        from ohmyvoice.hotkey import _KEY_CODES
+        for name, code in _KEY_CODES.items():
+            if code == keycode:
+                return name
+        return None
 
 
 def _cache_dir_for_display(settings):

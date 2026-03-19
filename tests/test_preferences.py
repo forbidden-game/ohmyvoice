@@ -142,3 +142,25 @@ def test_about_tab_shows_app_name(mock_app):
     pw._build()
     assert pw._app_name_label is not None
     assert pw._app_name_label.stringValue() == "OhMyVoice"
+
+
+def test_hotkey_manager_pause_resume():
+    """pause/resume methods exist and don't crash when no tap is active."""
+    from ohmyvoice.hotkey import HotkeyManager
+    hm = HotkeyManager(
+        modifiers=["option"], key="space",
+        on_press=lambda: None, on_release=lambda: None,
+    )
+    hm.pause()
+    hm.resume()
+
+
+def test_hotkey_capture_starts(mock_app):
+    from ohmyvoice.preferences import PreferencesWindow
+    pw = PreferencesWindow(mock_app)
+    pw._build()
+    assert pw._record_btn is not None
+    pw._start_hotkey_capture()
+    assert pw._record_btn.title() == "按下新组合..."
+    pw._cancel_hotkey_capture()
+    assert pw._record_btn.title() == "录制"

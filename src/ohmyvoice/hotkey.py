@@ -66,6 +66,16 @@ class HotkeyManager:
         if self._thread:
             self._thread.join(timeout=2)
 
+    def pause(self):
+        """Temporarily disable the event tap (e.g., during hotkey capture)."""
+        if self._tap:
+            Quartz.CGEventTapEnable(self._tap, False)
+
+    def resume(self):
+        """Re-enable the event tap after pause."""
+        if self._tap:
+            Quartz.CGEventTapEnable(self._tap, True)
+
     def update_hotkey(self, modifiers: list[str], key: str):
         self._modifiers = modifiers
         self._key = key
