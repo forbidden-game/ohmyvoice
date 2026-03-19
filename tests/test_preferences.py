@@ -89,3 +89,21 @@ def test_general_tab_autostart_switch(mock_app):
     assert pw._autostart_switch is not None
     # Default is False → state 0
     assert pw._autostart_switch.state() == 0
+
+
+def test_audio_tab_has_mic_popup(mock_app):
+    from ohmyvoice.preferences import PreferencesWindow
+    pw = PreferencesWindow(mock_app)
+    pw._build()
+    assert pw._mic_popup is not None
+    # First item should be "系统默认"
+    assert pw._mic_popup.itemTitleAtIndex_(0) == "系统默认"
+
+
+def test_audio_tab_sound_feedback_switch(mock_app):
+    from ohmyvoice.preferences import PreferencesWindow
+    pw = PreferencesWindow(mock_app)
+    pw._build()
+    assert pw._sound_switch is not None
+    # Default is True → state 1
+    assert pw._sound_switch.state() == 1

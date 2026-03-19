@@ -11,6 +11,7 @@ from AppKit import (
     NSImage,
     NSObject,
     NSPopUpButton,
+    NSSlider,
     NSSwitch,
     NSTextField,
     NSToolbar,
@@ -146,6 +147,34 @@ class _ActionDelegate(NSObject):
         # Placeholder — actual capture logic comes in Task 6
         pass
 
+    def onMicChanged_(self, sender):
+        if self._prefs is None:
+            return
+        idx = sender.indexOfSelectedItem()
+        devices = self._prefs._mic_devices
+        device = devices[idx] if idx < len(devices) else None
+        self._prefs._app._settings.input_device = device
+        self._prefs._app._settings.save()
+        try:
+            from ohmyvoice.recorder import Recorder
+            self._prefs._app._recorder = Recorder(sample_rate=16000, device=device)
+        except Exception:
+            pass
+
+    def onSoundFeedbackChanged_(self, sender):
+        if self._prefs is None:
+            return
+        self._prefs._app._settings.sound_feedback = sender.state() == 1
+        self._prefs._app._settings.save()
+
+    def onRecordingSliderChanged_(self, sender):
+        if self._prefs is None:
+            return
+        val = int(sender.integerValue())
+        self._prefs._app._settings.max_recording_seconds = val
+        self._prefs._recording_value_label.setStringValue_(f"{val} 秒")
+        self._prefs._app._settings.save()
+
 
 class PreferencesWindow:
     """NSWindow-based preferences with 4 toolbar tabs."""
@@ -163,6 +192,12 @@ class PreferencesWindow:
         self._autostart_switch = None
         self._notification_switch = None
         self._history_limit_field = None
+        # Audio tab control references
+        self._mic_popup = None
+        self._mic_devices = [None]
+        self._sound_switch = None
+        self._recording_slider = None
+        self._recording_value_label = None
         self._action_delegate = _ActionDelegate.alloc().init()
         self._action_delegate._prefs = self
 
@@ -211,6 +246,8 @@ class PreferencesWindow:
         view = self._views.get(tab_id)
         if view is None:
             return
+        if tab_id == "audio":
+            self._refresh_audio_devices()
         self._current_tab = tab_id
         self._window.setContentView_(view)
         # Resize window height keeping top-left corner fixed
@@ -477,9 +514,142 @@ class PreferencesWindow:
         return view
 
     def _build_audio_view(self):
-        return _FlippedView.alloc().initWithFrame_(
-            NSMakeRect(0, 0, _WINDOW_WIDTH, 200)
+        settings = self._app._settings
+        y = _PADDING
+
+        sec_label_h = 16
+        sec_gap = 6
+
+        # 输入 section: 1 row
+        input_group_h = _INNER_PAD + _ROW_H + _INNER_PAD
+        # 反馈 section: 1 row with sublabel
+        feedback_group_h = _INNER_PAD + _ROW_H_SUB + _INNER_PAD
+        # 录音 section: 1 row with sublabel (slider + value label)
+        recording_group_h = _INNER_PAD + _ROW_H_SUB + _INNER_PAD
+
+        total_h = (
+            _PADDING
+            + sec_label_h + sec_gap
+            + input_group_h + _SECTION_GAP
+            + sec_label_h + sec_gap
+            + feedback_group_h + _SECTION_GAP
+            + sec_label_h + sec_gap
+            + recording_group_h
+            + _PADDING
         )
+
+        view = _FlippedView.alloc().initWithFrame_(
+            NSMakeRect(0, 0, _WINDOW_WIDTH, total_h)
+        )
+
+        # -- 输入 --
+        self._section_header(view, "输入", y)
+        y += sec_label_h + sec_gap
+
+        box1 = self._group_box(view, y, input_group_h)
+
+        mic_popup = NSPopUpButton.alloc().initWithFrame_(NSMakeRect(0, 0, 180, 26))
+        mic_popup.setTarget_(self._action_delegate)
+        mic_popup.setAction_("onMicChanged:")
+        self._mic_popup = mic_popup
+        self._populate_mic_list()
+        self._row_in_group(box1, "麦克风", mic_popup, _INNER_PAD)
+
+        y += input_group_h + _SECTION_GAP
+
+        # -- 反馈 --
+        self._section_header(view, "反馈", y)
+        y += sec_label_h + sec_gap
+
+        box2 = self._group_box(view, y, feedback_group_h)
+
+        sound_sw = NSSwitch.alloc().initWithFrame_(NSMakeRect(0, 0, 38, 22))
+        sound_sw.setState_(1 if settings.sound_feedback else 0)
+        sound_sw.setTarget_(self._action_delegate)
+        sound_sw.setAction_("onSoundFeedbackChanged:")
+        self._sound_switch = sound_sw
+        self._row_in_group(
+            box2, "声音反馈", sound_sw,
+            _INNER_PAD,
+            sublabel="录音开始和转写完成时播放",
+        )
+
+        y += feedback_group_h + _SECTION_GAP
+
+        # -- 录音 --
+        self._section_header(view, "录音", y)
+        y += sec_label_h + sec_gap
+
+        box3 = self._group_box(view, y, recording_group_h)
+
+        # Compound: slider + value label
+        slider_w = 120
+        val_label_w = 50
+        gap = 8
+        compound_w = slider_w + gap + val_label_w
+        compound_h = _ROW_H_SUB
+
+        compound = NSView.alloc().initWithFrame_(
+            NSMakeRect(0, 0, compound_w, compound_h)
+        )
+
+        slider = NSSlider.alloc().initWithFrame_(NSMakeRect(0, (compound_h - 22) / 2, slider_w, 22))
+        slider.setMinValue_(10)
+        slider.setMaxValue_(120)
+        slider.setIntegerValue_(settings.max_recording_seconds)
+        slider.setContinuous_(True)
+        slider.setTarget_(self._action_delegate)
+        slider.setAction_("onRecordingSliderChanged:")
+        compound.addSubview_(slider)
+        self._recording_slider = slider
+
+        val_lbl = NSTextField.alloc().initWithFrame_(
+            NSMakeRect(slider_w + gap, (compound_h - 18) / 2, val_label_w, 18)
+        )
+        val_lbl.setStringValue_(f"{settings.max_recording_seconds} 秒")
+        val_lbl.setBezeled_(False)
+        val_lbl.setDrawsBackground_(False)
+        val_lbl.setEditable_(False)
+        val_lbl.setSelectable_(False)
+        val_lbl.setFont_(NSFont.systemFontOfSize_(13))
+        compound.addSubview_(val_lbl)
+        self._recording_value_label = val_lbl
+
+        self._row_in_group(
+            box3, "最长录音", compound,
+            _INNER_PAD,
+            sublabel="超时自动停止转写",
+        )
+
+        return view
+
+    def _populate_mic_list(self):
+        """Fill mic popup from Recorder.list_input_devices(); always starts with 系统默认."""
+        if self._mic_popup is None:
+            return
+        self._mic_popup.removeAllItems()
+        self._mic_devices = [None]
+        self._mic_popup.addItemWithTitle_("系统默认")
+        try:
+            from ohmyvoice.recorder import Recorder
+            devices = Recorder.list_input_devices()
+            for d in devices:
+                name = d["name"]
+                self._mic_popup.addItemWithTitle_(name)
+                self._mic_devices.append(name)
+        except Exception:
+            pass
+        # Select item matching current setting
+        current = self._app._settings.input_device
+        if current is None:
+            self._mic_popup.selectItemAtIndex_(0)
+        else:
+            idx = self._mic_devices.index(current) if current in self._mic_devices else 0
+            self._mic_popup.selectItemAtIndex_(idx)
+
+    def _refresh_audio_devices(self):
+        """Re-populate mic list (called when switching to audio tab)."""
+        self._populate_mic_list()
 
     def _build_recognition_view(self):
         return _FlippedView.alloc().initWithFrame_(
