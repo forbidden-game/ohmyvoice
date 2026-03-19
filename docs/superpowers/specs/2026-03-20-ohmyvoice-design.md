@@ -65,7 +65,7 @@ macOS 本地语音转文字工具。按住快捷键说话，松开后经 Qwen3-A
 |------|----|------|
 | ASR 推理 | `mlx-qwen3-asr` | Qwen3-ASR on MLX |
 | 音频录制 | `sounddevice` | 跨平台音频 I/O |
-| 全局快捷键 | `PyObjC` (Quartz) | macOS 全局热键注册 |
+| 全局快捷键 | `PyObjC` (Quartz, CGEventTap) | macOS 全局热键监听，需辅助功能权限 |
 | 剪贴板 | `PyObjC` (AppKit.NSPasteboard) | 写入剪贴板 |
 | Menu bar | `rumps` | macOS 状态栏应用 |
 | 历史存储 | `sqlite3` (标准库) | 转写记录持久化 |
@@ -115,7 +115,7 @@ macOS 本地语音转文字工具。按住快捷键说话，松开后经 Qwen3-A
 
 - 设置窗口中可点击热键区域重新录制快捷键
 - 支持修饰键 + 普通键的组合（如 ⌘⇧R, ⌃Space 等）
-- 检测冲突：如果快捷键已被其他应用占用，提示用户
+- 冲突处理：macOS 无全局热键冲突检测 API，采用 best-effort 方式——注册成功即可用，如果用户反馈无响应，设置界面提示"可能与其他应用冲突"
 - 热键变更即时生效，无需重启
 
 #### F4: System Prompt / 领域词表
@@ -168,7 +168,7 @@ macOS 本地语音转文字工具。按住快捷键说话，松开后经 Qwen3-A
 - 设置窗口 → 模型 tab
 - 显示：模型名称、量化精度、文件大小、内存占用
 - 模型状态：已加载 / 未加载 / 加载中
-- 首次启动时自动下载模型（显示进度）
+- 首次启动时自动下载模型（显示进度），通过 `mlx-qwen3-asr` 内置的 HuggingFace Hub 下载机制
 - 支持切换量化精度（4-bit / 8-bit），需重新加载模型
 
 ## 4. UI 设计
@@ -255,7 +255,7 @@ macOS 本地语音转文字工具。按住快捷键说话，松开后经 Qwen3-A
   },
   "language": "auto",
   "autostart": false,
-  "notification_on_complete": false,
+  "notification_on_complete": false,  // 预留，V1 暂不实现独立通知功能
   "history_max_entries": 1000
 }
 ```
