@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ohmyvoice"
+version = "0.1.0"
+description = "macOS local speech-to-text menu bar app"
+requires-python = ">=3.11"
+dependencies = [
+    "mlx-qwen3-asr[mic]>=0.2.4",
+    "rumps>=0.4.0",
+    "pyobjc-framework-Cocoa>=10.0",
+    "pyobjc-framework-Quartz>=10.0",
+    "sounddevice>=0.4.6",
+    "huggingface-hub>=0.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[project.scripts]
+ohmyvoice = "ohmyvoice.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ohmyvoice"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
