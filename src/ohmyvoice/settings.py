@@ -17,7 +17,7 @@ _DEFAULTS = {
         "active_template": "coding",
         "custom_prompt": "",
         "templates": {
-            "coding": "这是一位程序员对 coding agent 的口述指令。内容涉及 React、TypeScript、Python、API 设计等技术话题，包含大量英文技术术语。",
+            "coding": "这是一位程序员对 coding agent 的口述指令。常见术语：Claude Anthropic OpenAI GitHub Copilot React TypeScript Python API endpoint component async await Docker Kubernetes Ubuntu macOS Homebrew npm pip PostgreSQL Redis Nginx Vercel Cloudflare AWS 阿里云 Tencent",
             "meeting": "这是一段会议讨论录音，可能涉及多人发言。",
             "general": "",
         },
