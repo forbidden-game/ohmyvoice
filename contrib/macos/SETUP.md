@@ -6,9 +6,7 @@
 brew install node ffmpeg python3
 brew install --cask hammerspoon
 
-git clone https://github.com/anthropics/ohmyvoice.git
-cd ohmyvoice
-./setup-macos.sh
+git clone https://github.com/forbidden-game/ohmyvoice.git && cd ohmyvoice && ./setup-macos.sh
 ```
 
 The setup script handles building, Python venv, model download, and Hammerspoon integration. Grant **Accessibility** and **Microphone** to Hammerspoon when prompted.
@@ -69,13 +67,13 @@ Hammerspoon is a GUI application with a window server connection. Processes it s
 
 To change the key, edit the `keyCode` check in `ohmyvoice.lua`:
 
-| Key | keyCode |
-|-----|---------|
-| Right Command | 54 |
-| Left Command | 55 |
-| Right Option | 61 |
-| F1 | 122 |
-| F5 | 96 |
+| Key           | keyCode |
+| ------------- | ------- |
+| Right Command | 54      |
+| Left Command  | 55      |
+| Right Option  | 61      |
+| F1            | 122     |
+| F5            | 96      |
 
 For modifier keys (Command, Option), the eventtap listens to `flagsChanged`.
 For function keys, switch to `keyDown`/`keyUp` events — see the git history for an F1 example.

@@ -64,9 +64,7 @@ brew install --cask hammerspoon
 **2. One-command setup**
 
 ```bash
-git clone https://github.com/anthropics/ohmyvoice.git
-cd ohmyvoice
-./setup-macos.sh
+git clone https://github.com/forbidden-game/ohmyvoice.git && cd ohmyvoice && ./setup-macos.sh
 ```
 
 This builds the project, creates a local Python venv with SenseVoice dependencies, downloads the model (~228 MB), installs the Hammerspoon integration, and triggers the microphone permission prompt.
@@ -109,9 +107,7 @@ done
 **2. Build**
 
 ```bash
-git clone https://github.com/anthropics/ohmyvoice.git
-cd ohmyvoice
-npm ci && npm run build
+git clone https://github.com/forbidden-game/ohmyvoice.git && cd ohmyvoice && npm ci && npm run build
 ```
 
 **3. Start the daemon**
