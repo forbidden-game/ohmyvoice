@@ -127,16 +127,20 @@ class OhMyVoiceApp(rumps.App):
         self.template = template
 
     def _update_recent_menu(self):
-        records = self._history.recent(3)
-        sub = self.menu["最近转写"]
-        sub.clear()
-        for r in records:
-            preview = r["text"][:40] + ("…" if len(r["text"]) > 40 else "")
-            item = rumps.MenuItem(
-                preview,
-                callback=lambda _, text=r["text"]: copy_to_clipboard(text),
-            )
-            sub[preview] = item
+        try:
+            records = self._history.recent(3)
+            sub = self.menu["最近转写"]
+            # Remove old items (sub.clear() crashes when no submenu exists)
+            for key in list(sub.keys()):
+                del sub[key]
+            for r in records:
+                preview = r["text"][:40] + ("…" if len(r["text"]) > 40 else "")
+                sub[preview] = rumps.MenuItem(
+                    preview,
+                    callback=lambda _, text=r["text"]: copy_to_clipboard(text),
+                )
+        except Exception:
+            pass  # non-critical: menu display only
 
     def _on_settings(self, _):
         w = rumps.Window(
