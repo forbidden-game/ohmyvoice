@@ -40,12 +40,12 @@ node_major() {
 install_dependencies_apt() {
   if [ "$(node_major)" -lt 20 ]; then
     echo "[1/4] Installing Node.js 20..."
-    run_as_root apt-get update
-    run_as_root apt-get install -y ca-certificates curl gnupg
-    curl -fsSL https://deb.nodesource.com/setup_20.x | run_as_root bash -
+    run_as_root apt-get update </dev/null
+    run_as_root apt-get install -y ca-certificates curl gnupg </dev/null
+    curl -fsSL https://deb.nodesource.com/setup_20.x | run_as_root bash - </dev/null
   else
     echo "[1/4] Node.js >= 20 already present."
-    run_as_root apt-get update
+    run_as_root apt-get update </dev/null
   fi
 
   echo "[2/4] Installing Linux dependencies..."
@@ -56,7 +56,7 @@ install_dependencies_apt() {
     python3-venv \
     pipewire-tools \
     wl-clipboard \
-    libnotify-bin
+    libnotify-bin </dev/null
 }
 
 install_dependencies_pacman() {
@@ -68,7 +68,7 @@ install_dependencies_pacman() {
     python \
     pipewire \
     wl-clipboard \
-    libnotify
+    libnotify </dev/null
 }
 
 install_dependencies() {
