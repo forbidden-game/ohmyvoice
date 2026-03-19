@@ -1,6 +1,8 @@
 """macOS native preferences window with 4 toolbar tabs."""
 
 import objc
+from pathlib import Path as _Path
+
 from AppKit import (
     NSApplication,
     NSBackingStoreBuffered,
@@ -9,6 +11,7 @@ from AppKit import (
     NSColor,
     NSFont,
     NSImage,
+    NSImageView,
     NSObject,
     NSPopUpButton,
     NSScrollView,
@@ -23,8 +26,9 @@ from AppKit import (
     NSWindowStyleMaskClosable,
     NSWindowStyleMaskMiniaturizable,
     NSWindowStyleMaskTitled,
+    NSWorkspace,
 )
-from Foundation import NSMakeRect, NSMakeSize
+from Foundation import NSURL, NSMakeRect, NSMakeSize
 
 _WINDOW_WIDTH = 520
 _TAB_IDS = ["general", "audio", "recognition", "about"]
@@ -230,6 +234,16 @@ class _ActionDelegate(NSObject):
             s.custom_prompt = tv.string()
             s.save()
 
+    def onOpenGitHub_(self, sender):
+        NSWorkspace.sharedWorkspace().openURL_(
+            NSURL.URLWithString_("https://github.com/user/ohmyvoice")
+        )
+
+    def onOpenFeedback_(self, sender):
+        NSWorkspace.sharedWorkspace().openURL_(
+            NSURL.URLWithString_("https://github.com/user/ohmyvoice/issues")
+        )
+
 
 class PreferencesWindow:
     """NSWindow-based preferences with 4 toolbar tabs."""
@@ -257,6 +271,8 @@ class PreferencesWindow:
         self._template_popup = None
         self._prompt_textview = None
         self._quant_popup = None
+        # About tab control references
+        self._app_name_label = None
         self._action_delegate = _ActionDelegate.alloc().init()
         self._action_delegate._prefs = self
 
@@ -830,9 +846,183 @@ class PreferencesWindow:
         return view
 
     def _build_about_view(self):
-        return _FlippedView.alloc().initWithFrame_(
-            NSMakeRect(0, 0, _WINDOW_WIDTH, 260)
+        from ohmyvoice import __version__
+
+        settings = self._app._settings
+        engine = self._app._engine
+
+        sec_label_h = 16
+        sec_gap = 6
+
+        # Heights
+        icon_h = 48
+        name_h = 24
+        version_h = 18
+        header_gap = 16  # gap below version before first section
+
+        # 模型 section: 2 rows
+        model_group_h = _INNER_PAD + _ROW_H + 1 + _ROW_H + _INNER_PAD
+
+        # 链接 section: 2 rows
+        links_group_h = _INNER_PAD + _ROW_H + 1 + _ROW_H + _INNER_PAD
+
+        total_h = (
+            _PADDING
+            + icon_h + 8
+            + name_h + 4
+            + version_h + header_gap
+            + sec_label_h + sec_gap
+            + model_group_h + _SECTION_GAP
+            + sec_label_h + sec_gap
+            + links_group_h
+            + _PADDING
         )
+
+        view = _FlippedView.alloc().initWithFrame_(
+            NSMakeRect(0, 0, _WINDOW_WIDTH, total_h)
+        )
+
+        y = _PADDING
+
+        # ---- App icon ----
+        icon_size = 48
+        icon_img = NSImage.imageWithSystemSymbolName_accessibilityDescription_(
+            "mic.fill", "OhMyVoice"
+        )
+        icon_view = NSImageView.alloc().initWithFrame_(
+            NSMakeRect((_WINDOW_WIDTH - icon_size) // 2, y, icon_size, icon_size)
+        )
+        if icon_img:
+            icon_view.setImage_(icon_img)
+        icon_view.setContentTintColor_(NSColor.controlAccentColor())
+        view.addSubview_(icon_view)
+        y += icon_size + 8
+
+        # ---- App name ----
+        name_lbl = NSTextField.alloc().initWithFrame_(
+            NSMakeRect(0, y, _WINDOW_WIDTH, name_h)
+        )
+        name_lbl.setStringValue_("OhMyVoice")
+        name_lbl.setBezeled_(False)
+        name_lbl.setDrawsBackground_(False)
+        name_lbl.setEditable_(False)
+        name_lbl.setSelectable_(False)
+        name_lbl.setAlignment_(1)  # NSTextAlignmentCenter
+        name_lbl.setFont_(NSFont.boldSystemFontOfSize_(18))
+        view.addSubview_(name_lbl)
+        self._app_name_label = name_lbl
+        y += name_h + 4
+
+        # ---- Version ----
+        version_lbl = NSTextField.alloc().initWithFrame_(
+            NSMakeRect(0, y, _WINDOW_WIDTH, version_h)
+        )
+        version_lbl.setStringValue_(f"版本 {__version__}")
+        version_lbl.setBezeled_(False)
+        version_lbl.setDrawsBackground_(False)
+        version_lbl.setEditable_(False)
+        version_lbl.setSelectable_(False)
+        version_lbl.setAlignment_(1)  # NSTextAlignmentCenter
+        version_lbl.setFont_(NSFont.systemFontOfSize_(12))
+        version_lbl.setTextColor_(NSColor.secondaryLabelColor())
+        view.addSubview_(version_lbl)
+        y += version_h + header_gap
+
+        # ---- 模型 section ----
+        self._section_header(view, "模型", y)
+        y += sec_label_h + sec_gap
+
+        model_box = self._group_box(view, y, model_group_h)
+        row_y = _INNER_PAD
+
+        # Row 1: model name + load status
+        model_name = settings.model_name
+        model_quant = settings.model_quantization
+        model_display = f"{model_name} ({model_quant})"
+
+        is_loaded = getattr(engine, "is_loaded", False)
+        status_lbl = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 60, 18))
+        status_lbl.setStringValue_("已加载" if is_loaded else "未加载")
+        status_lbl.setBezeled_(False)
+        status_lbl.setDrawsBackground_(False)
+        status_lbl.setEditable_(False)
+        status_lbl.setSelectable_(False)
+        status_lbl.setAlignment_(2)  # NSTextAlignmentRight
+        status_lbl.setFont_(NSFont.systemFontOfSize_(13))
+        status_lbl.setTextColor_(
+            NSColor.systemGreenColor() if is_loaded else NSColor.secondaryLabelColor()
+        )
+        self._row_in_group(model_box, model_display, status_lbl, row_y)
+        row_y += _ROW_H
+
+        self._separator_in_group(model_box, row_y)
+        row_y += 1
+
+        # Row 2: disk usage
+        cache_path = _cache_dir_for_display(settings)
+        size_str = _dir_size_str(cache_path)
+        size_lbl = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 80, 18))
+        size_lbl.setStringValue_(size_str)
+        size_lbl.setBezeled_(False)
+        size_lbl.setDrawsBackground_(False)
+        size_lbl.setEditable_(False)
+        size_lbl.setSelectable_(False)
+        size_lbl.setAlignment_(2)  # NSTextAlignmentRight
+        size_lbl.setFont_(NSFont.systemFontOfSize_(13))
+        size_lbl.setTextColor_(NSColor.secondaryLabelColor())
+        self._row_in_group(model_box, "磁盘占用", size_lbl, row_y)
+
+        y += model_group_h + _SECTION_GAP
+
+        # ---- 链接 section ----
+        self._section_header(view, "链接", y)
+        y += sec_label_h + sec_gap
+
+        links_box = self._group_box(view, y, links_group_h)
+        row_y = _INNER_PAD
+
+        # Row 1: GitHub
+        gh_btn = NSButton.alloc().initWithFrame_(NSMakeRect(0, 0, 44, 22))
+        gh_btn.setTitle_("打开")
+        gh_btn.setBordered_(False)
+        gh_btn.setContentTintColor_(NSColor.linkColor())
+        gh_btn.setTarget_(self._action_delegate)
+        gh_btn.setAction_("onOpenGitHub:")
+        self._row_in_group(links_box, "GitHub 项目主页", gh_btn, row_y)
+        row_y += _ROW_H
+
+        self._separator_in_group(links_box, row_y)
+        row_y += 1
+
+        # Row 2: Feedback
+        fb_btn = NSButton.alloc().initWithFrame_(NSMakeRect(0, 0, 44, 22))
+        fb_btn.setTitle_("打开")
+        fb_btn.setBordered_(False)
+        fb_btn.setContentTintColor_(NSColor.linkColor())
+        fb_btn.setTarget_(self._action_delegate)
+        fb_btn.setAction_("onOpenFeedback:")
+        self._row_in_group(links_box, "反馈与建议", fb_btn, row_y)
+
+        return view
+
+
+def _cache_dir_for_display(settings):
+    name = settings.model_name.replace("/", "--").lower()
+    quant = settings.model_quantization
+    return _Path.home() / ".cache" / "ohmyvoice" / "models" / f"{name}-{quant}"
+
+
+def _dir_size_str(path):
+    if not path.exists():
+        return "—"
+    total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+    if total < 1024:
+        return f"{total} B"
+    if total < 1024 ** 2:
+        return f"{total / 1024:.0f} KB"
+    if total < 1024 ** 3:
+        return f"{total / 1024 ** 2:.0f} MB"
+    return f"{total / 1024 ** 3:.1f} GB"
 
 
 def _make_point(x, y):

@@ -134,3 +134,11 @@ def test_recognition_tab_quantization_popup(mock_app):
     assert pw._quant_popup is not None
     # Default is "4bit" → index 0 ("4-bit")
     assert pw._quant_popup.indexOfSelectedItem() == 0
+
+
+def test_about_tab_shows_app_name(mock_app):
+    from ohmyvoice.preferences import PreferencesWindow
+    pw = PreferencesWindow(mock_app)
+    pw._build()
+    assert pw._app_name_label is not None
+    assert pw._app_name_label.stringValue() == "OhMyVoice"
