@@ -307,7 +307,8 @@ def test_general_tab_has_hotkey_display(mock_app):
     pw = PreferencesWindow(mock_app)
     pw._build()
     assert pw._hotkey_label is not None
-    assert "Space" in pw._hotkey_label.stringValue()
+    # hotkey_display returns "⌥SPACE" (uppercase)
+    assert "SPACE" in pw._hotkey_label.stringValue()
 
 
 def test_general_tab_language_popup(mock_app):
@@ -818,6 +819,12 @@ def onMicChanged_(self, sender):
     device = devices[idx] if idx < len(devices) else None
     self._prefs._app._settings.input_device = device
     self._save()
+    # Rebuild Recorder with new device
+    from ohmyvoice.recorder import Recorder
+
+    self._prefs._app._recorder = Recorder(
+        sample_rate=16000, device=device
+    )
 
 def onSoundFeedbackChanged_(self, sender):
     self._prefs._app._settings.sound_feedback = sender.state() == 1
@@ -1151,10 +1158,6 @@ def _build_about_view(self):
     )
     if icon:
         icon_view.setImage_(icon)
-        config = NSImage.SymbolConfiguration.configurationWithPointSize_weight_(
-            36, 0.3
-        )
-        icon_view.setSymbolConfiguration_(config)
     icon_view.setContentTintColor_(NSColor.controlAccentColor())
     view.addSubview_(icon_view)
     y += 56
@@ -1166,7 +1169,9 @@ def _build_about_view(self):
     view.addSubview_(self._app_name_label)
     y += 24
 
-    version_label = NSTextField.labelWithString_("版本 0.1.0")
+    from ohmyvoice import __version__
+
+    version_label = NSTextField.labelWithString_(f"版本 {__version__}")
     version_label.setFont_(NSFont.systemFontOfSize_(12))
     version_label.setTextColor_(NSColor.secondaryLabelColor())
     version_label.setAlignment_(1)
