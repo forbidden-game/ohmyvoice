@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from ohmyvoice.settings import Settings
+from ohmyvoice.settings import Settings, _PROMPT_VERSION
 
 def test_defaults_when_no_file(tmp_path):
     s = Settings(config_dir=tmp_path)
@@ -44,3 +44,30 @@ def test_corrupted_file_resets_to_defaults(tmp_path):
     (tmp_path / "settings.json").write_text("not json{{{")
     s = Settings(config_dir=tmp_path)
     assert s.hotkey_key == "space"
+
+def test_old_prompt_version_resets_templates(tmp_path):
+    # Simulate a settings file saved at an old prompt version with a stale template.
+    old_settings = {
+        "hotkey": {"modifiers": ["option"], "key": "space"},
+        "prompt": {
+            "active_template": "coding",
+            "custom_prompt": "",
+            "templates": {
+                "coding": "stale old template without new brands",
+                "meeting": "old meeting template",
+                "general": "",
+            },
+        },
+        "language": "zh",
+        "prompt_version": 0,
+    }
+    (tmp_path / "settings.json").write_text(json.dumps(old_settings))
+    s = Settings(config_dir=tmp_path)
+    # Templates must be reset to current defaults.
+    assert "stale old template" not in s.prompt_templates["coding"]
+    assert s._data["prompt_version"] == _PROMPT_VERSION
+    # Unrelated user setting must survive.
+    assert s.language == "zh"
+    # The updated version must be persisted.
+    reloaded = json.loads((tmp_path / "settings.json").read_text())
+    assert reloaded["prompt_version"] == _PROMPT_VERSION

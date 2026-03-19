@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+_PROMPT_VERSION = 2
+
 _DEFAULTS = {
     "hotkey": {"modifiers": ["option"], "key": "space"},
     "audio": {
@@ -26,6 +28,7 @@ _DEFAULTS = {
     "autostart": False,
     "notification_on_complete": False,
     "history_max_entries": 1000,
+    "prompt_version": 0,
 }
 
 
@@ -45,6 +48,12 @@ class Settings:
                 _deep_merge(self._data, saved)
             except (json.JSONDecodeError, OSError):
                 self._data = _deep_copy(_DEFAULTS)
+        if self._data.get("prompt_version", 0) < _PROMPT_VERSION:
+            self._data["prompt"]["templates"] = _deep_copy(
+                _DEFAULTS["prompt"]["templates"]
+            )
+            self._data["prompt_version"] = _PROMPT_VERSION
+            self.save()
 
     def save(self):
         self._path.parent.mkdir(parents=True, exist_ok=True)
