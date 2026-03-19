@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Bootstrap ohmyvoice on macOS from a single command.
+# Wrapped in main() so that bash reads the entire script before executing,
+# preventing package managers from consuming stdin when run via curl|bash.
 set -euo pipefail
+
+main() {
 
 REPO="${OHMYVOICE_GITHUB_REPO:-forbidden-game/ohmyvoice}"
 REF="${OHMYVOICE_REF:-main}"
@@ -155,3 +159,7 @@ run_setup
 echo ""
 echo "ohmyvoice is installed in ${INSTALL_DIR}"
 echo "Re-run this command anytime to update."
+
+}
+
+main "$@"
