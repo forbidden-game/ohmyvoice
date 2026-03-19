@@ -220,9 +220,12 @@ class _ActionDelegate(NSObject):
         s.save()
         engine = self._prefs._app._engine
         def _reload():
-            engine.unload()
-            bits = int(val.replace("bit", ""))
-            engine.load(quantize_bits=bits)
+            try:
+                engine.unload()
+                bits = int(val.replace("bit", ""))
+                engine.load(quantize_bits=bits)
+            except Exception as e:
+                print(f"Model reload failed: {e}")
         threading.Thread(target=_reload, daemon=True).start()
 
     def textDidChange_(self, notification):
@@ -1007,9 +1010,9 @@ class PreferencesWindow:
 
 
 def _cache_dir_for_display(settings):
-    name = settings.model_name.replace("/", "--").lower()
-    quant = settings.model_quantization
-    return _Path.home() / ".cache" / "ohmyvoice" / "models" / f"{name}-{quant}"
+    from ohmyvoice.asr import _cache_dir_for
+    bits = int(settings.model_quantization.replace("bit", ""))
+    return _cache_dir_for(settings.model_name, bits)
 
 
 def _dir_size_str(path):
