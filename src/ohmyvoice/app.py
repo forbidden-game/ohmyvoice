@@ -26,6 +26,7 @@ from ohmyvoice.history import HistoryDB
 from ohmyvoice.hotkey import HotkeyManager
 from ohmyvoice.notification import send_notification
 from ohmyvoice.recorder import Recorder
+from ohmyvoice.preferences import PreferencesWindow
 from ohmyvoice.settings import Settings
 
 _ICONS = Path(__file__).parent.parent.parent / "resources" / "icons"
@@ -46,6 +47,7 @@ class OhMyVoiceApp(rumps.App):
         )
         self._engine = ASREngine()
         self._hotkey: HotkeyManager | None = None
+        self._prefs_window = None
         self._state = "idle"
         self._build_menu()
         self._load_model_async()
@@ -65,7 +67,8 @@ class OhMyVoiceApp(rumps.App):
     def _load_model_async(self):
         def _load():
             try:
-                self._engine.load()
+                bits = int(self._settings.model_quantization.replace("bit", ""))
+                self._engine.load(quantize_bits=bits)
                 self._set_state("idle")
                 self.menu[
                     "状态: 加载中..."
@@ -158,29 +161,9 @@ class OhMyVoiceApp(rumps.App):
             pass  # non-critical: menu display only
 
     def _on_settings(self, _):
-        w = rumps.Window(
-            message="输入新的快捷键（如 option+space）:",
-            title="OhMyVoice 设置",
-            default_text=(
-                f"{'+'.join(self._settings.hotkey_modifiers)}"
-                f"+{self._settings.hotkey_key}"
-            ),
-            ok="保存",
-            cancel="取消",
-            dimensions=(300, 24),
-        )
-        resp = w.run()
-        if resp.clicked:
-            parts = resp.text.strip().lower().split("+")
-            if len(parts) >= 2:
-                self._settings.hotkey_modifiers = parts[:-1]
-                self._settings.hotkey_key = parts[-1]
-                self._settings.save()
-                if self._hotkey:
-                    self._hotkey.update_hotkey(
-                        self._settings.hotkey_modifiers,
-                        self._settings.hotkey_key,
-                    )
+        if self._prefs_window is None:
+            self._prefs_window = PreferencesWindow(self)
+        self._prefs_window.show()
 
     def _on_history(self, _):
         records = self._history.recent(20)
