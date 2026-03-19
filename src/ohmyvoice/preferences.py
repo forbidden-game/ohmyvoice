@@ -11,9 +11,11 @@ from AppKit import (
     NSImage,
     NSObject,
     NSPopUpButton,
+    NSScrollView,
     NSSlider,
     NSSwitch,
     NSTextField,
+    NSTextView,
     NSToolbar,
     NSToolbarItem,
     NSView,
@@ -48,6 +50,12 @@ _INNER_PAD = 14
 
 _LANGUAGE_OPTIONS = ["自动检测", "中文为主", "英文为主"]
 _LANGUAGE_VALUES = ["auto", "zh", "en"]
+
+_TEMPLATE_OPTIONS = ["编程", "会议", "日常", "自定义"]
+_TEMPLATE_VALUES = ["coding", "meeting", "general", "custom"]
+
+_QUANT_OPTIONS = ["4-bit", "8-bit"]
+_QUANT_VALUES = ["4bit", "8bit"]
 
 
 class _FlippedView(NSView):
@@ -175,6 +183,53 @@ class _ActionDelegate(NSObject):
         self._prefs._recording_value_label.setStringValue_(f"{val} 秒")
         self._prefs._app._settings.save()
 
+    def onTemplateChanged_(self, sender):
+        if self._prefs is None:
+            return
+        idx = sender.indexOfSelectedItem()
+        val = _TEMPLATE_VALUES[idx] if 0 <= idx < len(_TEMPLATE_VALUES) else "coding"
+        s = self._prefs._app._settings
+        s.active_prompt_template = val
+        s.save()
+        tv = self._prefs._prompt_textview
+        if tv is None:
+            return
+        if val == "custom":
+            tv.setString_(s.custom_prompt)
+            tv.setEditable_(True)
+            tv.setBackgroundColor_(NSColor.textBackgroundColor())
+        else:
+            tv.setString_(s.get_active_prompt())
+            tv.setEditable_(False)
+            tv.setBackgroundColor_(NSColor.controlBackgroundColor())
+
+    def onQuantChanged_(self, sender):
+        if self._prefs is None:
+            return
+        import threading
+        idx = sender.indexOfSelectedItem()
+        val = _QUANT_VALUES[idx] if 0 <= idx < len(_QUANT_VALUES) else "4bit"
+        s = self._prefs._app._settings
+        if val == s.model_quantization:
+            return
+        s.model_quantization = val
+        s.save()
+        engine = self._prefs._app._engine
+        def _reload():
+            engine.unload()
+            bits = int(val.replace("bit", ""))
+            engine.load(quantize_bits=bits)
+        threading.Thread(target=_reload, daemon=True).start()
+
+    def textDidChange_(self, notification):
+        if self._prefs is None:
+            return
+        tv = notification.object()
+        s = self._prefs._app._settings
+        if s.active_prompt_template == "custom":
+            s.custom_prompt = tv.string()
+            s.save()
+
 
 class PreferencesWindow:
     """NSWindow-based preferences with 4 toolbar tabs."""
@@ -198,6 +253,10 @@ class PreferencesWindow:
         self._sound_switch = None
         self._recording_slider = None
         self._recording_value_label = None
+        # Recognition tab control references
+        self._template_popup = None
+        self._prompt_textview = None
+        self._quant_popup = None
         self._action_delegate = _ActionDelegate.alloc().init()
         self._action_delegate._prefs = self
 
@@ -652,9 +711,123 @@ class PreferencesWindow:
         self._populate_mic_list()
 
     def _build_recognition_view(self):
-        return _FlippedView.alloc().initWithFrame_(
-            NSMakeRect(0, 0, _WINDOW_WIDTH, 280)
+        settings = self._app._settings
+        y = _PADDING
+
+        sec_label_h = 16
+        sec_gap = 6
+        text_view_h = 90
+        hint_label_h = 18
+
+        # PROMPT section: 1-row group box + text view + hint
+        prompt_group_h = _INNER_PAD + _ROW_H + _INNER_PAD
+        # 模型 section: 1-row group box + warning label
+        quant_group_h = _INNER_PAD + _ROW_H + 22 + _INNER_PAD
+
+        total_h = (
+            _PADDING
+            + sec_label_h + sec_gap
+            + prompt_group_h + 8
+            + text_view_h + 8
+            + hint_label_h + _SECTION_GAP
+            + sec_label_h + sec_gap
+            + quant_group_h
+            + _PADDING
         )
+
+        view = _FlippedView.alloc().initWithFrame_(
+            NSMakeRect(0, 0, _WINDOW_WIDTH, total_h)
+        )
+
+        # -- PROMPT 模板 --
+        self._section_header(view, "PROMPT 模板", y)
+        y += sec_label_h + sec_gap
+
+        box1 = self._group_box(view, y, prompt_group_h)
+
+        template_popup = NSPopUpButton.alloc().initWithFrame_(NSMakeRect(0, 0, 130, 26))
+        for opt in _TEMPLATE_OPTIONS:
+            template_popup.addItemWithTitle_(opt)
+        current_tpl = settings.active_prompt_template
+        sel_idx = _TEMPLATE_VALUES.index(current_tpl) if current_tpl in _TEMPLATE_VALUES else 0
+        template_popup.selectItemAtIndex_(sel_idx)
+        template_popup.setTarget_(self._action_delegate)
+        template_popup.setAction_("onTemplateChanged:")
+        self._template_popup = template_popup
+        self._row_in_group(box1, "模板", template_popup, _INNER_PAD)
+
+        y += prompt_group_h + 8
+
+        # Text view (NSScrollView + NSTextView)
+        is_custom = current_tpl == "custom"
+        initial_text = settings.custom_prompt if is_custom else settings.get_active_prompt()
+        scroll = NSScrollView.alloc().initWithFrame_(
+            NSMakeRect(_PADDING, y, _CONTENT_W, text_view_h)
+        )
+        tv = NSTextView.alloc().initWithFrame_(
+            NSMakeRect(0, 0, _CONTENT_W, text_view_h)
+        )
+        tv.setFont_(NSFont.monospacedSystemFontOfSize_weight_(12, 0.0))
+        tv.setString_(initial_text)
+        tv.setEditable_(is_custom)
+        tv.setBackgroundColor_(
+            NSColor.textBackgroundColor() if is_custom else NSColor.controlBackgroundColor()
+        )
+        tv.setDelegate_(self._action_delegate)
+        scroll.setDocumentView_(tv)
+        scroll.setHasVerticalScroller_(True)
+        scroll.setBorderType_(3)  # NSBezelBorder
+        view.addSubview_(scroll)
+        self._prompt_textview = tv
+
+        y += text_view_h + 8
+
+        # Hint label
+        hint = NSTextField.alloc().initWithFrame_(
+            NSMakeRect(_PADDING, y, _CONTENT_W, hint_label_h)
+        )
+        hint.setStringValue_('选择\u201c自定义\u201d后可编辑内容，预设模板仅供预览')
+        hint.setBezeled_(False)
+        hint.setDrawsBackground_(False)
+        hint.setEditable_(False)
+        hint.setSelectable_(False)
+        hint.setFont_(NSFont.systemFontOfSize_(11))
+        hint.setTextColor_(NSColor.secondaryLabelColor())
+        view.addSubview_(hint)
+
+        y += hint_label_h + _SECTION_GAP
+
+        # -- 模型 --
+        self._section_header(view, "模型", y)
+        y += sec_label_h + sec_gap
+
+        box2 = self._group_box(view, y, quant_group_h)
+
+        quant_popup = NSPopUpButton.alloc().initWithFrame_(NSMakeRect(0, 0, 130, 26))
+        for opt in _QUANT_OPTIONS:
+            quant_popup.addItemWithTitle_(opt)
+        current_quant = settings.model_quantization
+        quant_idx = _QUANT_VALUES.index(current_quant) if current_quant in _QUANT_VALUES else 0
+        quant_popup.selectItemAtIndex_(quant_idx)
+        quant_popup.setTarget_(self._action_delegate)
+        quant_popup.setAction_("onQuantChanged:")
+        self._quant_popup = quant_popup
+        self._row_in_group(box2, "精度", quant_popup, _INNER_PAD)
+
+        # Warning label inside the group box
+        warn = NSTextField.alloc().initWithFrame_(
+            NSMakeRect(_INNER_PAD, _INNER_PAD + _ROW_H, _CONTENT_W - 2 * _INNER_PAD, 18)
+        )
+        warn.setStringValue_("⚠ 切换精度需要重新加载模型（约 5 秒）")
+        warn.setBezeled_(False)
+        warn.setDrawsBackground_(False)
+        warn.setEditable_(False)
+        warn.setSelectable_(False)
+        warn.setFont_(NSFont.systemFontOfSize_(11))
+        warn.setTextColor_(NSColor.systemOrangeColor())
+        box2.addSubview_(warn)
+
+        return view
 
     def _build_about_view(self):
         return _FlippedView.alloc().initWithFrame_(

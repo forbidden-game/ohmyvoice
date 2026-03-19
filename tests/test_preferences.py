@@ -107,3 +107,30 @@ def test_audio_tab_sound_feedback_switch(mock_app):
     assert pw._sound_switch is not None
     # Default is True → state 1
     assert pw._sound_switch.state() == 1
+
+
+def test_recognition_tab_template_popup(mock_app):
+    from ohmyvoice.preferences import PreferencesWindow
+    pw = PreferencesWindow(mock_app)
+    pw._build()
+    assert pw._template_popup is not None
+    # Default template is "coding" → index 0
+    assert pw._template_popup.indexOfSelectedItem() == 0
+
+
+def test_recognition_tab_prompt_readonly_for_presets(mock_app):
+    from ohmyvoice.preferences import PreferencesWindow
+    pw = PreferencesWindow(mock_app)
+    pw._build()
+    assert pw._prompt_textview is not None
+    # Preset templates should be non-editable
+    assert pw._prompt_textview.isEditable() is False
+
+
+def test_recognition_tab_quantization_popup(mock_app):
+    from ohmyvoice.preferences import PreferencesWindow
+    pw = PreferencesWindow(mock_app)
+    pw._build()
+    assert pw._quant_popup is not None
+    # Default is "4bit" → index 0 ("4-bit")
+    assert pw._quant_popup.indexOfSelectedItem() == 0
