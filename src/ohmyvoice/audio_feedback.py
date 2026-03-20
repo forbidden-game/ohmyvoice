@@ -1,7 +1,8 @@
 from pathlib import Path
 from AppKit import NSSound
 
-_RESOURCES = Path(__file__).parent.parent.parent / "resources" / "sounds"
+from ohmyvoice.paths import get_resources_dir
+_RESOURCES = get_resources_dir() / "sounds"
 _SYSTEM_SOUNDS = Path("/System/Library/Sounds")
 
 

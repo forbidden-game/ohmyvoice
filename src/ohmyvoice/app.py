@@ -1,7 +1,6 @@
 import re
 import threading
 import time
-from pathlib import Path
 
 import rumps
 
@@ -29,7 +28,8 @@ from ohmyvoice.recorder import Recorder
 from ohmyvoice.settings import Settings
 from ohmyvoice.ui_bridge import UIBridge
 
-_ICONS = Path(__file__).parent.parent.parent / "resources" / "icons"
+from ohmyvoice.paths import get_resources_dir
+_ICONS = get_resources_dir() / "icons"
 
 
 class OhMyVoiceApp(rumps.App):
