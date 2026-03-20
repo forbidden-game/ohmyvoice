@@ -15,10 +15,15 @@ class HistoryDB:
     def __init__(self, db_path: Path | None = None):
         if db_path is None:
             db_path = Path.home() / ".local" / "share" / "ohmyvoice" / "history.db"
+        self._db_path = db_path
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
+
+    @property
+    def db_path(self) -> Path:
+        return self._db_path
 
     def add(self, text: str, duration: float) -> int:
         cur = self._conn.execute(

@@ -61,6 +61,15 @@ class Settings:
             json.dump(self._data, f, indent=2, ensure_ascii=False)
 
     @property
+    def path(self) -> Path:
+        return self._path
+
+    def reload(self):
+        """Re-read settings.json from disk (called after Swift UI closes)."""
+        self._data = _deep_copy(_DEFAULTS)
+        self._load()
+
+    @property
     def hotkey_modifiers(self) -> list[str]:
         return self._data["hotkey"]["modifiers"]
 
