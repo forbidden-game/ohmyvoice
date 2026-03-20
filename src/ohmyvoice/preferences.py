@@ -6,6 +6,7 @@ from pathlib import Path as _Path
 from AppKit import (
     NSApplication,
     NSBackingStoreBuffered,
+    NSBezierPath,
     NSBox,
     NSButton,
     NSColor,
@@ -67,6 +68,32 @@ class _FlippedView(NSView):
 
     def isFlipped(self):
         return True
+
+
+class _GroupView(_FlippedView):
+    """Flipped view with rounded background and optional border — replaces NSBox."""
+
+    _cornerRadius = objc.ivar.double()
+    _hasBorder = objc.ivar.bool()
+
+    def initWithFrame_(self, frame):
+        self = objc.super(_GroupView, self).initWithFrame_(frame)
+        if self is None:
+            return None
+        self._cornerRadius = 8.0
+        self._hasBorder = True
+        return self
+
+    def drawRect_(self, rect):
+        path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+            self.bounds(), self._cornerRadius, self._cornerRadius
+        )
+        NSColor.controlBackgroundColor().setFill()
+        path.fill()
+        if self._hasBorder:
+            NSColor.separatorColor().setStroke()
+            path.setLineWidth_(0.5)
+            path.stroke()
 
 
 class _ToolbarDelegate(NSObject):
@@ -355,23 +382,16 @@ class PreferencesWindow:
         label.setDrawsBackground_(False)
         label.setEditable_(False)
         label.setSelectable_(False)
-        label.setFont_(NSFont.systemFontOfSize_(10))
+        label.setFont_(NSFont.systemFontOfSize_weight_(11, 0.4))
         label.setTextColor_(NSColor.secondaryLabelColor())
         parent.addSubview_(label)
         return y + 16
 
     def _group_box(self, parent, y, height):
-        """Rounded background box for grouped rows."""
-        box = NSBox.alloc().initWithFrame_(
+        """Rounded background group with flipped (top-down) coordinates."""
+        box = _GroupView.alloc().initWithFrame_(
             NSMakeRect(_PADDING, y, _CONTENT_W, height)
         )
-        box.setBoxType_(4)  # NSBoxCustom
-        box.setFillColor_(NSColor.controlBackgroundColor())
-        box.setBorderColor_(NSColor.separatorColor())
-        box.setCornerRadius_(8)
-        box.setBorderWidth_(0.5)
-        box.setContentViewMargins_(NSMakeSize(0, 0))
-        box.setTitle_("")
         parent.addSubview_(box)
         return box
 
@@ -380,9 +400,16 @@ class PreferencesWindow:
         row_h = _ROW_H_SUB if sublabel else _ROW_H
         group_h = int(group.frame().size.height)
 
-        # Label
+        # Label — vertically centered (or paired with sublabel)
+        if sublabel:
+            # Center the label+sublabel pair: total ~32px in 48px row → 8px top margin
+            label_y = row_y + 7
+        else:
+            # Center single label: 18px in 36px row → 9px top margin
+            label_y = row_y + (row_h - 18) // 2
+
         lbl = NSTextField.alloc().initWithFrame_(
-            NSMakeRect(_INNER_PAD, row_y, 180, 18)
+            NSMakeRect(_INNER_PAD, label_y, 220, 18)
         )
         lbl.setStringValue_(label_text)
         lbl.setBezeled_(False)
@@ -394,7 +421,7 @@ class PreferencesWindow:
 
         if sublabel:
             sub = NSTextField.alloc().initWithFrame_(
-                NSMakeRect(_INNER_PAD, row_y + 20, 200, 14)
+                NSMakeRect(_INNER_PAD, label_y + 19, 260, 14)
             )
             sub.setStringValue_(sublabel)
             sub.setBezeled_(False)
@@ -442,7 +469,7 @@ class PreferencesWindow:
         sec2_group_h = _INNER_PAD + _ROW_H * 3 + 2 * 1 + _INNER_PAD
 
         # ---- 数据 section ----
-        sec3_group_h = _INNER_PAD + _ROW_H + _INNER_PAD
+        sec3_group_h = _INNER_PAD + _ROW_H_SUB + _INNER_PAD
 
         total_h = (
             _PADDING                        # top
@@ -499,7 +526,7 @@ class PreferencesWindow:
         self._record_btn = rec_btn
 
         self._row_in_group(
-            box1, "快捷键", compound,
+            box1, "按住说话", compound,
             _INNER_PAD,
             sublabel="按住录音，松开转写",
         )
@@ -512,7 +539,7 @@ class PreferencesWindow:
         box2 = self._group_box(view, y, sec2_group_h)
         row_y = _INNER_PAD
 
-        # Language popup
+        # Language popup (first)
         popup = NSPopUpButton.alloc().initWithFrame_(NSMakeRect(0, 0, 130, 26))
         for opt in _LANGUAGE_OPTIONS:
             popup.addItemWithTitle_(opt)
@@ -522,25 +549,25 @@ class PreferencesWindow:
         popup.setTarget_(self._action_delegate)
         popup.setAction_("onLanguageChanged:")
         self._language_popup = popup
-        self._row_in_group(box2, "语言", popup, row_y)
+        self._row_in_group(box2, "语言偏好", popup, row_y)
         row_y += _ROW_H
 
         self._separator_in_group(box2, row_y)
         row_y += 1
 
-        # Autostart switch
+        # Autostart switch (second)
         autostart_sw = NSSwitch.alloc().initWithFrame_(NSMakeRect(0, 0, 38, 22))
         autostart_sw.setState_(1 if settings.autostart else 0)
         autostart_sw.setTarget_(self._action_delegate)
         autostart_sw.setAction_("onAutostartChanged:")
         self._autostart_switch = autostart_sw
-        self._row_in_group(box2, "开机启动", autostart_sw, row_y)
+        self._row_in_group(box2, "开机自启", autostart_sw, row_y)
         row_y += _ROW_H
 
         self._separator_in_group(box2, row_y)
         row_y += 1
 
-        # Notification switch
+        # Notification switch (third)
         notif_sw = NSSwitch.alloc().initWithFrame_(NSMakeRect(0, 0, 38, 22))
         notif_sw.setState_(1 if settings.notification_on_complete else 0)
         notif_sw.setTarget_(self._action_delegate)
@@ -589,7 +616,10 @@ class PreferencesWindow:
         unit_lbl.setFont_(NSFont.systemFontOfSize_(13))
         compound2.addSubview_(unit_lbl)
 
-        self._row_in_group(box3, "历史记录", compound2, _INNER_PAD)
+        self._row_in_group(
+            box3, "历史记录上限", compound2, _INNER_PAD,
+            sublabel="超出后自动删除最旧记录",
+        )
 
         return view
 
@@ -649,7 +679,7 @@ class PreferencesWindow:
         sound_sw.setAction_("onSoundFeedbackChanged:")
         self._sound_switch = sound_sw
         self._row_in_group(
-            box2, "声音反馈", sound_sw,
+            box2, "提示音", sound_sw,
             _INNER_PAD,
             sublabel="录音开始和转写完成时播放",
         )
@@ -696,7 +726,7 @@ class PreferencesWindow:
         self._recording_value_label = val_lbl
 
         self._row_in_group(
-            box3, "最长录音", compound,
+            box3, "最长录音时间", compound,
             _INNER_PAD,
             sublabel="超时自动停止转写",
         )
@@ -775,7 +805,7 @@ class PreferencesWindow:
         template_popup.setTarget_(self._action_delegate)
         template_popup.setAction_("onTemplateChanged:")
         self._template_popup = template_popup
-        self._row_in_group(box1, "模板", template_popup, _INNER_PAD)
+        self._row_in_group(box1, "当前模板", template_popup, _INNER_PAD)
 
         y += prompt_group_h + 8
 
@@ -795,6 +825,10 @@ class PreferencesWindow:
             NSColor.textBackgroundColor() if is_custom else NSColor.controlBackgroundColor()
         )
         tv.setDelegate_(self._action_delegate)
+        # Enable vertical scrolling: text wraps horizontally, grows vertically
+        tv.setHorizontallyResizable_(False)
+        tv.setVerticallyResizable_(True)
+        tv.textContainer().setWidthTracksTextView_(True)
         scroll.setDocumentView_(tv)
         scroll.setHasVerticalScroller_(True)
         scroll.setBorderType_(3)  # NSBezelBorder
@@ -833,7 +867,7 @@ class PreferencesWindow:
         quant_popup.setTarget_(self._action_delegate)
         quant_popup.setAction_("onQuantChanged:")
         self._quant_popup = quant_popup
-        self._row_in_group(box2, "精度", quant_popup, _INNER_PAD)
+        self._row_in_group(box2, "量化精度", quant_popup, _INNER_PAD)
 
         # Warning label inside the group box
         warn = NSTextField.alloc().initWithFrame_(
