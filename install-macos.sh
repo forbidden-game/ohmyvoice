@@ -91,7 +91,7 @@ ensure_homebrew() {
 
   echo "Homebrew not found. Installing Homebrew..."
   NONINTERACTIVE=1 /bin/bash -c \
-    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
   activate_homebrew
 
   if ! command -v brew >/dev/null 2>&1; then
@@ -105,8 +105,8 @@ install_dependencies() {
   ensure_homebrew
 
   echo "[1/3] Installing macOS dependencies..."
-  brew install node ffmpeg python3
-  brew install --cask hammerspoon
+  brew install node ffmpeg python3 </dev/null
+  brew install --cask hammerspoon </dev/null
 }
 
 download_repo() {
