@@ -27,6 +27,12 @@ cp -R resources/sounds "${APP_DIR}/Contents/Resources/sounds" 2>/dev/null || tru
 cp resources/AppIcon.icns "${APP_DIR}/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 cp ui/.build/release/ohmyvoice-ui "${APP_DIR}/Contents/MacOS/"
 
+# Step 3b: Copy mlx Metal shaders (not picked up by PyInstaller)
+MLX_METALLIB=$(python -c "import mlx; from pathlib import Path; print(Path(mlx.__file__).parent / 'lib' / 'mlx.metallib')")
+if [ -f "$MLX_METALLIB" ]; then
+  cp "$MLX_METALLIB" "${APP_DIR}/Contents/Frameworks/mlx/lib/"
+fi
+
 # Step 4: Pre-flight check — @2x icons
 for state in idle recording processing done; do
   if [ ! -f "${APP_DIR}/Contents/Resources/icons/mic_${state}@2x.png" ]; then
@@ -35,9 +41,9 @@ for state in idle recording processing done; do
 done
 
 # Step 5: Inside-out code signing
-# Sign all Mach-O binaries in _internal/ first, then executables, then outer bundle
-# 5a: _internal/ — all .so, .dylib, and executable Mach-O files
-find "${APP_DIR}/Contents/MacOS/_internal" -type f \( -name '*.dylib' -o -name '*.so' -o -perm +111 \) | while read bin; do
+# Sign all Mach-O binaries in Frameworks/ first, then executables, then outer bundle
+# 5a: Frameworks/ — all .so, .dylib, and executable Mach-O files
+find "${APP_DIR}/Contents/Frameworks" -type f \( -name '*.dylib' -o -name '*.so' -o -perm +111 \) | while read bin; do
   if file "$bin" | grep -q "Mach-O"; then
     codesign --force --options runtime --sign "${DEVELOPER_ID_APPLICATION}" "$bin"
   fi
