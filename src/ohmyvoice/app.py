@@ -1,6 +1,4 @@
 import re
-import threading
-import time
 
 import rumps
 from AppKit import NSImage, NSImageRep
@@ -19,7 +17,6 @@ def _clean_text(text: str) -> str:
     text = re.sub(r'^[，、。\s]+|[，、\s]+$', '', text)
     return text.strip()
 
-from ohmyvoice.asr import ASREngine
 from ohmyvoice.audio_feedback import play_done, play_start
 from ohmyvoice.clipboard import copy_to_clipboard
 from ohmyvoice.history import HistoryDB
@@ -28,6 +25,7 @@ from ohmyvoice.notification import send_notification
 from ohmyvoice.recorder import Recorder
 from ohmyvoice.settings import Settings
 from ohmyvoice.ui_bridge import UIBridge
+from ohmyvoice.worker_manager import WorkerManager
 
 from ohmyvoice.paths import get_resources_dir
 _ICONS = get_resources_dir() / "icons"
@@ -67,12 +65,17 @@ class OhMyVoiceApp(rumps.App):
         self._recorder = Recorder(
             sample_rate=16000, device=self._settings.input_device
         )
-        self._engine = ASREngine()
+        self._manager = WorkerManager(
+            on_result=self._handle_result,
+            on_error=self._handle_error,
+            on_state_change=self._handle_state_change,
+            on_model_loaded=self._handle_model_loaded,
+        )
         self._hotkey: HotkeyManager | None = None
         self._ui_bridge = UIBridge(self)
-        self._state = "idle"
         self._build_menu()
-        self._load_model_async()
+        self._start_hotkey()
+        self._manager.start(quantization=self._settings.model_quantization)
 
     def _build_menu(self):
         self.menu = [
@@ -86,21 +89,6 @@ class OhMyVoiceApp(rumps.App):
             rumps.MenuItem("退出", callback=self._on_quit),
         ]
 
-    def _load_model_async(self):
-        def _load():
-            try:
-                bits = int(self._settings.model_quantization.replace("bit", ""))
-                self._engine.load(quantize_bits=bits)
-                self._set_state("idle")
-                self.menu[
-                    "状态: 加载中..."
-                ].title = f"就绪 · {self._settings.hotkey_display}"
-                self._start_hotkey()
-            except Exception as e:
-                self.menu["状态: 加载中..."].title = f"模型加载失败: {e}"
-
-        threading.Thread(target=_load, daemon=True).start()
-
     def _start_hotkey(self):
         self._hotkey = HotkeyManager(
             modifiers=self._settings.hotkey_modifiers,
@@ -113,49 +101,58 @@ class OhMyVoiceApp(rumps.App):
             self.menu["状态: 加载中..."].title = "需要辅助功能权限"
 
     def _on_hotkey_press(self):
-        if self._state != "idle" or not self._engine.is_loaded:
+        q = self._settings.model_quantization
+        if not self._manager.on_press(q):
             return
+        # Update icon directly (reviewer fix #8: manager doesn't fire state_change for recording)
         self._set_state("recording")
         if self._settings.sound_feedback:
             play_start()
         self._recorder.start()
 
     def _on_hotkey_release(self):
-        if self._state != "recording":
+        if self._manager.app_state != "recording":
             return
         audio = self._recorder.stop()
-        if len(audio) < 1600:  # < 0.1s, ignore accidental taps
+        if len(audio) < 1600:
             print("[DEBUG] Audio too short, ignoring")
-            self._set_state("idle")
+            self._manager.on_short_audio()
             return
+        # Update icon directly (reviewer fix #8)
         self._set_state("processing")
-        threading.Thread(
-            target=self._process_audio, args=(audio,), daemon=True
-        ).start()
+        wav_path = WorkerManager.write_temp_wav(audio)
+        context = self._settings.get_active_prompt()
+        self._manager.on_release(wav_path, 16000, context)
 
-    def _process_audio(self, audio):
+    def _handle_result(self, text, language, duration_seconds):
+        text = _clean_text(text)
+        if text:
+            copy_to_clipboard(text)
+            self._history.add(text, duration=duration_seconds)
+            self._history.prune(self._settings.history_max_entries)
+            self._update_recent_menu()
+            if self._settings.sound_feedback:
+                play_done()
+            if self._settings.notification_on_complete:
+                send_notification(text)
+
+    def _handle_error(self, message):
+        print(f"ASR error: {message}")
+
+    def _handle_state_change(self, new_state):
+        """Called by manager for done->idle and error->idle transitions."""
+        self._set_state(new_state)
+
+    def _handle_model_loaded(self, quantization):
         try:
-            context = self._settings.get_active_prompt()
-            result = self._engine.transcribe(audio, context=context)
-            text = _clean_text(result.text)
-            if text:
-                copy_to_clipboard(text)
-                self._history.add(text, duration=result.duration_seconds)
-                self._history.prune(self._settings.history_max_entries)
-                self._update_recent_menu()
-                if self._settings.sound_feedback:
-                    play_done()
-                if self._settings.notification_on_complete:
-                    send_notification(text)
-            self._set_state("done")
-            time.sleep(1)
-            self._set_state("idle")
-        except Exception as e:
-            print(f"ASR error: {e}")
-            self._set_state("idle")
+            item = self.menu["状态: 加载中..."]
+            item.title = f"就绪 · {self._settings.hotkey_display}"
+        except KeyError:
+            pass
+        if self._ui_bridge.is_running:
+            self._ui_bridge.notify_model_reloaded()
 
     def _set_state(self, state: str):
-        self._state = state
         icon_map = {
             "idle": ("mic_idle.png", True),
             "recording": ("mic_recording.png", False),
@@ -197,6 +194,7 @@ class OhMyVoiceApp(rumps.App):
     def _on_quit(self, _):
         if self._hotkey:
             self._hotkey.stop()
+        self._manager.shutdown()
         self._history.close()
         rumps.quit_application()
 

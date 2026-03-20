@@ -63,6 +63,7 @@ class ASREngine:
     def __init__(self, model_id: str = "Qwen/Qwen3-ASR-0.6B"):
         self._model_id = model_id
         self._session = None
+        self._quantize_bits: int | None = None
 
     def load(self, quantize_bits: int = 4) -> None:
         from mlx_qwen3_asr import Session, load_model
@@ -87,11 +88,16 @@ class ASREngine:
 
         # Limit MLX memory cache to prevent unbounded growth
         mx.set_cache_limit(512 * 1024 * 1024)  # 512MB
+        self._quantize_bits = quantize_bits
         self._session = Session(model=model)
 
     @property
     def is_loaded(self) -> bool:
         return self._session is not None
+
+    @property
+    def quantize_bits(self) -> int | None:
+        return self._quantize_bits
 
     def transcribe(
         self,
@@ -118,3 +124,15 @@ class ASREngine:
 
     def unload(self) -> None:
         self._session = None
+        self._quantize_bits = None
+        import gc
+        gc.collect()
+        try:
+            import mlx.core as mx
+            if hasattr(mx.metal, "clear_cache"):
+                mx.metal.clear_cache()
+            else:
+                old_limit = mx.metal.set_cache_limit(0)
+                mx.metal.set_cache_limit(old_limit)
+        except (ImportError, AttributeError):
+            pass

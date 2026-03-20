@@ -7,7 +7,7 @@ def test_build_state_message():
     app = MagicMock()
     app._settings.model_name = "Qwen3-ASR-0.6B"
     app._settings.model_quantization = "4bit"
-    app._engine.is_loaded = True
+    app._manager.worker_state = "ready"
 
     bridge = UIBridge(app)
     msg = bridge._build_state_message()
@@ -31,6 +31,8 @@ def test_handle_reload_model():
     bridge._handle_message({"type": "reload_model", "quantization": "8bit"})
     # Verify quantization updated in memory immediately
     assert app._settings.model_quantization == "8bit"
+    # Verify manager.reload_model called
+    app._manager.reload_model.assert_called_once_with("8bit")
 
 
 def test_handle_toggle_autostart():

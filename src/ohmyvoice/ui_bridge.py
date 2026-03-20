@@ -159,7 +159,7 @@ class UIBridge:
         from ohmyvoice import __version__
         return {
             "type": "state",
-            "model_loaded": getattr(self._app._engine, "is_loaded", False),
+            "model_loaded": self._app._manager.worker_state in ("ready", "transcribing"),
             "model_name": self._app._settings.model_name,
             "quantization": self._app._settings.model_quantization,
             "disk_usage": disk_usage,
@@ -172,22 +172,7 @@ class UIBridge:
         # Update in-memory settings immediately (Swift already wrote settings.json)
         self._app._settings.model_quantization = quantization
         self._send({"type": "model_reloading"})
-
-        def _reload():
-            try:
-                engine = self._app._engine
-                engine.unload()
-                bits = int(quantization.replace("bit", ""))
-                engine.load(quantize_bits=bits)
-                self._send({"type": "model_reloaded", "success": True})
-            except Exception as e:
-                self._send({
-                    "type": "model_reloaded",
-                    "success": False,
-                    "error": str(e),
-                })
-
-        threading.Thread(target=_reload, daemon=True).start()
+        self._app._manager.reload_model(quantization)
 
     def _handle_update_mic(self, msg):
         device = msg.get("device")
@@ -212,6 +197,13 @@ class UIBridge:
             self._send({"type": "autostart_done", "success": True})
         except Exception:
             self._send({"type": "autostart_done", "success": False})
+
+    def notify_model_reloaded(self, success=True, error=None):
+        """Notify the UI that model reload completed."""
+        msg = {"type": "model_reloaded", "success": success}
+        if error:
+            msg["error"] = error
+        self._send(msg)
 
     def _on_process_exit(self):
         if self._process:

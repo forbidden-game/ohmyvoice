@@ -26,3 +26,18 @@ def test_transcribe_returns_result_type(engine):
     result = engine.transcribe(tone)
     assert hasattr(result, "text")
     assert hasattr(result, "language")
+
+
+def test_quantize_bits_none_before_load():
+    e = ASREngine()
+    assert e.quantize_bits is None
+
+
+def test_quantize_bits_set_after_load(engine):
+    assert engine.quantize_bits == 4
+
+
+def test_quantize_bits_none_after_unload():
+    e = ASREngine()
+    e.unload()
+    assert e.quantize_bits is None
