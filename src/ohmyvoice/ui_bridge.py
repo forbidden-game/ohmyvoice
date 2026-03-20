@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -57,18 +58,17 @@ class UIBridge:
             if p.exists():
                 return p
 
-        # 2. Development: <project>/ui/.build/release/ohmyvoice-ui
-        project_root = Path(__file__).parent.parent.parent
-        dev_path = project_root / "ui" / ".build" / "release" / "ohmyvoice-ui"
-        if dev_path.exists():
-            return dev_path
-
-        # 3. App bundle: <bundle>/Contents/MacOS/ohmyvoice-ui
-        import sys
+        # 2. App bundle (frozen): Contents/MacOS/ohmyvoice-ui
         if getattr(sys, "frozen", False):
             bundle_path = Path(sys.executable).parent / "ohmyvoice-ui"
             if bundle_path.exists():
                 return bundle_path
+
+        # 3. Development: <project>/ui/.build/release/ohmyvoice-ui
+        project_root = Path(__file__).parent.parent.parent
+        dev_path = project_root / "ui" / ".build" / "release" / "ohmyvoice-ui"
+        if dev_path.exists():
+            return dev_path
 
         return None
 

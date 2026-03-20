@@ -87,3 +87,37 @@ def test_handle_close():
 
     bridge._handle_message({"type": "close"})
     app._settings.reload.assert_called_once()
+
+
+def test_find_binary_frozen_before_dev(tmp_path, monkeypatch):
+    """In frozen mode, check bundle path before dev path."""
+    import sys
+    import ohmyvoice.ui_bridge as ub
+
+    # Create a "dev" binary at a path that _find_binary's dev-path lookup will find
+    fake_project = tmp_path / "project"
+    fake_src = fake_project / "src" / "ohmyvoice"
+    fake_src.mkdir(parents=True)
+    dev_binary = fake_project / "ui" / ".build" / "release" / "ohmyvoice-ui"
+    dev_binary.parent.mkdir(parents=True)
+    dev_binary.touch()
+
+    # Also create a "frozen" binary
+    frozen_binary = tmp_path / "bundle" / "Contents" / "MacOS" / "ohmyvoice-ui"
+    frozen_binary.parent.mkdir(parents=True)
+    frozen_binary.touch()
+    fake_exe = str(frozen_binary.parent / "ohmyvoice")
+
+    app = MagicMock()
+    bridge = UIBridge(app)
+
+    # Monkeypatch __file__ so dev path resolves to our tmp tree
+    monkeypatch.setattr(ub, "__file__", str(fake_src / "ui_bridge.py"))
+
+    with monkeypatch.context() as m:
+        m.setattr(sys, "frozen", True, raising=False)
+        m.setattr(sys, "executable", fake_exe)
+        result = bridge._find_binary()
+
+    # Must find the frozen binary, not the dev one
+    assert result == frozen_binary
