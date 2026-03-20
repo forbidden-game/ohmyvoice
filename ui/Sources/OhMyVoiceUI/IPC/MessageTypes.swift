@@ -1,5 +1,9 @@
 import Foundation
 
+public enum OhMyVoiceUI {
+    public static let protocolVersion = 1
+}
+
 // MARK: - Shared types
 
 public struct MicDevice: Codable, Sendable {
