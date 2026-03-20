@@ -51,14 +51,18 @@ OhMyVoice.app/
 
 关键配置：
 - **入口**：`src/ohmyvoice/__main__.py`
-- **datas**：`resources/icons` → `Contents/Resources/icons`，`resources/sounds` → `Contents/Resources/sounds`
-- **binaries**：`ui/.build/release/ohmyvoice-ui` → `Contents/MacOS/`
 - **hiddenimports**：`mlx`、`mlx.core`、`mlx.nn`、`mlx_qwen3_asr`、`sounddevice`、`_sounddevice_data`、`rumps`、`numpy`、`huggingface_hub`
 - **excludes**：`pytest`、`_pytest`、`coverage`、`pip`、`setuptools`
 - **BUNDLE** 参数：`name='OhMyVoice'`、`bundle_identifier='com.ohmyvoice.app'`、`icon='resources/AppIcon.icns'`
 - **Info.plist 覆盖**：
   - `NSMicrophoneUsageDescription`：语音转文字需要访问麦克风
   - `LSUIElement`：`True`（无 Dock 图标，纯菜单栏应用）
+
+**资源和二进制文件不通过 spec 的 datas/binaries 嵌入**。PyInstaller 的 `datas` 会放到 `_internal/` 目录而非 `Contents/Resources/`。改用构建脚本的 post-build copy：
+- `resources/icons/` → `Contents/Resources/icons/`
+- `resources/sounds/` → `Contents/Resources/sounds/`（当前为空，系统音效兜底）
+- `resources/AppIcon.icns` → `Contents/Resources/AppIcon.icns`
+- `ui/.build/release/ohmyvoice-ui` → `Contents/MacOS/ohmyvoice-ui`
 
 ## 4. 代码适配
 
@@ -99,9 +103,35 @@ if getattr(sys, "frozen", False):
 
 用 `open` 命令启动 .app bundle，macOS 会正确处理单实例和激活。
 
-### 4c. ui_bridge.py
+### 4c. ui_bridge.py `_find_binary` 搜索顺序调整
 
-不需要改。已有 frozen 检测逻辑（`ui_bridge.py:67-71`），会在 `sys.executable` 同目录找 `ohmyvoice-ui`。
+现有代码先查开发路径再查 frozen 路径。在 frozen 模式下 `Path(__file__)` 指向 `_internal/` 目录，开发路径不会命中所以碰巧能工作——但如果 .app 恰好放在项目目录内（比如 dist/ 下），开发路径可能意外匹配。
+
+修改：把 `sys.frozen` 检测提到最前面，env override 之后、dev path 之前：
+
+```python
+def _find_binary(self) -> Path | None:
+    # 1. Environment override
+    env_path = os.environ.get("OHMYVOICE_UI_PATH")
+    if env_path:
+        p = Path(env_path)
+        if p.exists():
+            return p
+
+    # 2. App bundle (frozen): Contents/MacOS/ohmyvoice-ui
+    if getattr(sys, "frozen", False):
+        bundle_path = Path(sys.executable).parent / "ohmyvoice-ui"
+        if bundle_path.exists():
+            return bundle_path
+
+    # 3. Development: <project>/ui/.build/release/ohmyvoice-ui
+    project_root = Path(__file__).parent.parent.parent
+    dev_path = project_root / "ui" / ".build" / "release" / "ohmyvoice-ui"
+    if dev_path.exists():
+        return dev_path
+
+    return None
+```
 
 ## 5. 图标设计
 
@@ -136,6 +166,7 @@ set -euo pipefail
 VERSION=$(python -c "from ohmyvoice import __version__; print(__version__)")
 APP_NAME="OhMyVoice"
 DMG_NAME="${APP_NAME}-${VERSION}-arm64.dmg"
+APP_DIR="dist/${APP_NAME}.app"
 
 # Step 1: Build Swift UI
 cd ui && swift build -c release && cd ..
@@ -143,26 +174,57 @@ cd ui && swift build -c release && cd ..
 # Step 2: PyInstaller
 pyinstaller ohmyvoice.spec --noconfirm
 
-# Step 3: Copy Swift binary into bundle
-cp ui/.build/release/ohmyvoice-ui "dist/${APP_NAME}.app/Contents/MacOS/"
+# Step 3: Post-build copy — resources and Swift binary
+# PyInstaller datas 放到 _internal/，我们需要放到 Contents/Resources/
+cp -R resources/icons  "${APP_DIR}/Contents/Resources/icons"
+cp -R resources/sounds "${APP_DIR}/Contents/Resources/sounds" 2>/dev/null || true
+cp resources/AppIcon.icns "${APP_DIR}/Contents/Resources/AppIcon.icns" 2>/dev/null || true
+cp ui/.build/release/ohmyvoice-ui "${APP_DIR}/Contents/MacOS/"
 
-# Step 4: Sign (递归签名所有 binary/dylib/framework)
-codesign --deep --force --options runtime \
+# Step 4: Pre-flight check — @2x icons
+for state in idle recording processing done; do
+  if [ ! -f "${APP_DIR}/Contents/Resources/icons/mic_${state}@2x.png" ]; then
+    echo "WARNING: missing mic_${state}@2x.png — Retina 显示会模糊"
+  fi
+done
+
+# Step 5: Inside-out code signing
+# 不用 --deep，逐层签名确保公证通过
+# 5a: Frameworks / dylibs
+find "${APP_DIR}/Contents/Frameworks" -name '*.dylib' -o -name '*.so' | while read lib; do
+  codesign --force --options runtime --sign "${DEVELOPER_ID_APPLICATION}" "$lib"
+done
+
+# 5b: Swift UI binary（不需要 Python 侧的宽松 entitlements）
+codesign --force --options runtime \
+  --sign "${DEVELOPER_ID_APPLICATION}" \
+  "${APP_DIR}/Contents/MacOS/ohmyvoice-ui"
+
+# 5c: Python 主可执行文件（需要宽松 entitlements 给 MLX）
+codesign --force --options runtime \
   --sign "${DEVELOPER_ID_APPLICATION}" \
   --entitlements entitlements.plist \
-  "dist/${APP_NAME}.app"
+  "${APP_DIR}/Contents/MacOS/ohmyvoice"
 
-# Step 5: Notarize
-xcrun notarytool submit "dist/${APP_NAME}.app" \
+# 5d: 外层 bundle
+codesign --force --options runtime \
+  --sign "${DEVELOPER_ID_APPLICATION}" \
+  --entitlements entitlements.plist \
+  "${APP_DIR}"
+
+# Step 6: Notarize（notarytool 需要 zip/dmg/pkg，不接受 bare .app）
+ditto -c -k --keepParent "${APP_DIR}" "dist/${APP_NAME}.zip"
+xcrun notarytool submit "dist/${APP_NAME}.zip" \
   --apple-id "${APPLE_ID}" \
   --team-id "${APPLE_TEAM_ID}" \
   --password "${APP_PASSWORD}" \
   --wait
+rm "dist/${APP_NAME}.zip"
 
-# Step 6: Staple
-xcrun stapler staple "dist/${APP_NAME}.app"
+# Step 7: Staple
+xcrun stapler staple "${APP_DIR}"
 
-# Step 7: Create DMG
+# Step 8: Create DMG
 create-dmg \
   --volname "${APP_NAME}" \
   --window-size 600 400 \
@@ -170,15 +232,17 @@ create-dmg \
   --icon "${APP_NAME}.app" 150 200 \
   --app-drop-link 450 200 \
   "dist/${DMG_NAME}" \
-  "dist/${APP_NAME}.app"
+  "${APP_DIR}"
 
-# Step 8: Sign DMG
+# Step 9: Sign DMG
 codesign --sign "${DEVELOPER_ID_APPLICATION}" "dist/${DMG_NAME}"
 ```
 
 ## 7. Entitlements
 
-文件：`entitlements.plist`（项目根目录）
+两份 entitlements 文件，分别用于 Python 主进程和 Swift UI 子进程。
+
+### `entitlements.plist`（Python 主进程，宽松权限给 MLX）
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -204,25 +268,40 @@ codesign --sign "${DEVELOPER_ID_APPLICATION}" "dist/${DMG_NAME}"
 - `allow-unsigned-executable-memory`：MLX Metal JIT 编译需要
 - `disable-library-validation`：PyInstaller 打包的 dylib 签名链不完整时需要
 
+### Swift UI 子进程
+
+`ohmyvoice-ui` 不需要额外 entitlements，签名时不指定 `--entitlements`。它不直接访问麦克风或 Metal JIT，只通过 stdin/stdout 与 Python 进程通信。
+
 ## 8. Makefile 扩展
 
 ```makefile
+VERSION := $(shell python -c "from ohmyvoice import __version__; print(__version__)")
+
 dist: build-swift
 	pyinstaller ohmyvoice.spec --noconfirm
+	cp -R resources/icons dist/OhMyVoice.app/Contents/Resources/icons
+	cp -R resources/sounds dist/OhMyVoice.app/Contents/Resources/sounds 2>/dev/null || true
 	cp ui/.build/release/ohmyvoice-ui dist/OhMyVoice.app/Contents/MacOS/
 
 app: dist  # alias
 
 sign:
-	codesign --deep --force --options runtime \
-		--sign "$(DEVELOPER_ID_APPLICATION)" \
-		--entitlements entitlements.plist \
-		dist/OhMyVoice.app
+	@# inside-out signing: frameworks → Swift binary → Python binary → outer bundle
+	find dist/OhMyVoice.app/Contents/Frameworks -name '*.dylib' -o -name '*.so' | \
+		xargs -I{} codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" {}
+	codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" \
+		dist/OhMyVoice.app/Contents/MacOS/ohmyvoice-ui
+	codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" \
+		--entitlements entitlements.plist dist/OhMyVoice.app/Contents/MacOS/ohmyvoice
+	codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" \
+		--entitlements entitlements.plist dist/OhMyVoice.app
 
 notarize:
-	xcrun notarytool submit dist/OhMyVoice.app \
+	ditto -c -k --keepParent dist/OhMyVoice.app dist/OhMyVoice.zip
+	xcrun notarytool submit dist/OhMyVoice.zip \
 		--apple-id "$(APPLE_ID)" --team-id "$(APPLE_TEAM_ID)" \
 		--password "$(APP_PASSWORD)" --wait
+	rm dist/OhMyVoice.zip
 	xcrun stapler staple dist/OhMyVoice.app
 
 dmg: dist sign notarize
