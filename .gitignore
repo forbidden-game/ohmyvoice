@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 .venv/
 dist/
+build/
+*.spec.bak
 *.egg-info/
 .superpowers/
 .pytest_cache/
