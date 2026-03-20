@@ -191,7 +191,7 @@ set -euo pipefail
 # APP_PASSWORD              - app-specific password for notarytool
 
 # 从源码文件直接提取版本号，不依赖 pip install
-VERSION=$(grep -oP '(?<=__version__ = ").*(?=")' src/ohmyvoice/__init__.py)
+VERSION=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/ohmyvoice/__init__.py)
 APP_NAME="OhMyVoice"
 DMG_NAME="${APP_NAME}-${VERSION}-arm64.dmg"
 APP_DIR="dist/${APP_NAME}.app"
@@ -317,7 +317,7 @@ xcrun stapler staple "dist/${DMG_NAME}"
 ## 8. Makefile 扩展
 
 ```makefile
-VERSION := $(shell grep -oP '(?<=__version__ = ").*(?=")' src/ohmyvoice/__init__.py)
+VERSION := $(shell sed -n 's/^__version__ = "\(.*\)"/\1/p' src/ohmyvoice/__init__.py)
 
 dist: build-swift
 	pyinstaller ohmyvoice.spec --noconfirm
