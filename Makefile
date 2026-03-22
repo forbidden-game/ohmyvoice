@@ -1,11 +1,8 @@
-.PHONY: build build-swift build-python test test-swift test-python clean run dist app \
+.PHONY: build build-swift test test-swift test-python clean run dist app \
 	print-signing-identities notary-store-credentials check-signing check-notary-profile \
 	check-create-dmg sign notarize dmg-local dmg
 
-VENV_BIN ?= $(CURDIR)/.venv/bin
-PYTHON ?= $(VENV_BIN)/python
-PIP ?= $(VENV_BIN)/pip
-PYINSTALLER ?= $(VENV_BIN)/pyinstaller
+UV ?= uv
 CREATE_DMG ?= create-dmg
 CREATE_DMG_FLAGS ?= --skip-jenkins
 NOTARY_PROFILE ?= ohmyvoice-notary
@@ -21,33 +18,30 @@ build: build-swift
 build-swift:
 	cd ui && swift build -c release
 
-build-python:
-	$(PIP) install -e ".[dev,dist]"
-
 test: test-swift test-python
 
 test-swift:
 	cd ui && swift test
 
 test-python:
-	$(PYTHON) -m pytest tests/test_ui_bridge.py tests/test_settings_reload.py -v
+	$(UV) run --extra dev pytest -v
 
 clean:
 	cd ui && swift package clean
 	rm -rf ui/.build
 
 run: build-swift
-	PATH="$(VENV_BIN):$$PATH" $(PYTHON) -m ohmyvoice
+	$(UV) run python -m ohmyvoice
 
 dist: build-swift
-	PATH="$(VENV_BIN):$$PATH" $(PYINSTALLER) ohmyvoice.spec --noconfirm
+	$(UV) run --extra dist pyinstaller ohmyvoice.spec --noconfirm
 	mkdir -p $(APP_DIR)/Contents/Resources
 	cp -R resources/icons $(APP_DIR)/Contents/Resources/icons
 	cp -R resources/sounds $(APP_DIR)/Contents/Resources/sounds 2>/dev/null || true
 	cp resources/AppIcon.icns $(APP_DIR)/Contents/Resources/AppIcon.icns 2>/dev/null || true
 	cp ui/.build/release/ohmyvoice-ui $(APP_DIR)/Contents/MacOS/
 	@# mlx Metal shaders are not picked up by PyInstaller — copy manually
-	@MLX_METALLIB=$$(PATH="$(VENV_BIN):$$PATH" $(PYTHON) -c 'from pathlib import Path; import mlx; print(next((str(p) for base in getattr(mlx, "__path__", []) for p in [Path(base) / "lib" / "mlx.metallib"] if p.exists()), ""))'); \
+	@MLX_METALLIB=$$($(UV) run python -c 'from pathlib import Path; import mlx; print(next((str(p) for base in getattr(mlx, "__path__", []) for p in [Path(base) / "lib" / "mlx.metallib"] if p.exists()), ""))'); \
 	if [ -n "$$MLX_METALLIB" ]; then \
 		mkdir -p $(APP_DIR)/Contents/Frameworks/mlx/lib; \
 		cp "$$MLX_METALLIB" $(APP_DIR)/Contents/Frameworks/mlx/lib/; \
