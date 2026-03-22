@@ -53,6 +53,11 @@ dist: build-swift
 		cp "$$MLX_METALLIB" $(APP_DIR)/Contents/Frameworks/mlx/lib/; \
 	fi
 	rm -rf $(APP_DIR)/Contents/_CodeSignature
+	@for state in idle recording processing done; do \
+		if [ ! -f "$(APP_DIR)/Contents/Resources/icons/mic_$${state}@2x.png" ]; then \
+			echo "WARNING: missing mic_$${state}@2x.png — Retina displays will show blurry icons"; \
+		fi; \
+	done
 
 app: dist
 
@@ -67,17 +72,22 @@ notary-store-credentials:
 
 check-signing:
 	@test -n "$(DEVELOPER_ID_APPLICATION)" || { echo "Missing Developer ID Application certificate in Keychain."; exit 1; }
+	@COUNT=$$(security find-identity -v -p codesigning 2>/dev/null | grep -c "Developer ID Application:" || true); \
+	if [ "$$COUNT" -gt 1 ]; then \
+		echo "WARNING: $$COUNT Developer ID Application certificates found. Using: $(DEVELOPER_ID_APPLICATION)"; \
+		echo "Set DEVELOPER_ID_APPLICATION explicitly if this is wrong."; \
+	fi
 
 check-notary-profile:
-	@xcrun notarytool history --keychain-profile "$(NOTARY_PROFILE)" >/dev/null || { \
-		echo "Missing notary profile '$(NOTARY_PROFILE)'. Run make notary-store-credentials APPLE_ID=... APPLE_TEAM_ID=..."; \
+	@security find-generic-password -l "$(NOTARY_PROFILE)" >/dev/null 2>&1 || { \
+		echo "Notary profile '$(NOTARY_PROFILE)' not found in Keychain. Run: make notary-store-credentials APPLE_ID=... APPLE_TEAM_ID=..."; \
 		exit 1; \
 	}
 
 check-create-dmg:
 	@command -v "$(CREATE_DMG)" >/dev/null || { echo "Missing create-dmg. Install it with: brew install create-dmg"; exit 1; }
 
-sign: dist check-signing
+sign: check-signing
 	@# inside-out signing: Frameworks/ Mach-O → Swift binary → Python binary → outer bundle
 	find $(APP_DIR)/Contents/Frameworks -type f \( -name '*.dylib' -o -name '*.so' -o -name '*.metallib' -o -perm +111 \) -print0 | \
 		while IFS= read -r -d '' bin; do \
@@ -108,7 +118,7 @@ dmg-local: dist check-create-dmg
 		--app-drop-link 450 200 \
 		$(DMG_PATH) $(APP_DIR)
 
-dmg: notarize check-create-dmg
+dmg: dist notarize check-create-dmg
 	rm -f $(DMG_PATH)
 	$(CREATE_DMG) $(CREATE_DMG_FLAGS) --volname $(APP_NAME) --window-size 600 400 \
 		--icon-size 128 --icon $(APP_NAME).app 150 200 \
