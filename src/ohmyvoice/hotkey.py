@@ -38,7 +38,7 @@ class HotkeyManager:
         self._tap = Quartz.CGEventTapCreate(
             Quartz.kCGSessionEventTap,
             Quartz.kCGHeadInsertEventTap,
-            Quartz.kCGEventTapOptionListenOnly,
+            Quartz.kCGEventTapOptionDefault,
             mask,
             self._callback,
             None,
@@ -82,6 +82,14 @@ class HotkeyManager:
         self._key_held = False
 
     def _callback(self, proxy, event_type, event, refcon):
+        if event_type in (
+            Quartz.kCGEventTapDisabledByTimeout,
+            Quartz.kCGEventTapDisabledByUserInput,
+        ):
+            if self._tap:
+                Quartz.CGEventTapEnable(self._tap, True)
+            return event
+
         key_code = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
         flags = Quartz.CGEventGetFlags(event)
         target_code = _KEY_CODES.get(self._key)
@@ -92,12 +100,13 @@ class HotkeyManager:
             required_flags |= _MODIFIER_FLAGS.get(mod, 0)
         modifiers_match = (flags & required_flags) == required_flags
 
-        if event_type == Quartz.kCGEventKeyDown and not self._key_held:
-            if key_code == target_code and modifiers_match:
+        if event_type == Quartz.kCGEventKeyDown and key_code == target_code and modifiers_match:
+            if not self._key_held:
                 self._key_held = True
                 self._on_press()
-        elif event_type == Quartz.kCGEventKeyUp:
-            if key_code == target_code and self._key_held:
-                self._key_held = False
-                self._on_release()
+            return None
+        if event_type == Quartz.kCGEventKeyUp and key_code == target_code and self._key_held:
+            self._key_held = False
+            self._on_release()
+            return None
         return event
